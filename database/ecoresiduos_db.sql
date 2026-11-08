@@ -83,6 +83,7 @@ CREATE TABLE tipo_residuo (
 CREATE TABLE empresa (
     id               SERIAL      PRIMARY KEY,
     codigo           VARCHAR(10) NOT NULL UNIQUE,      -- E1, E2, ...
+    nombre           VARCHAR(100) NOT NULL,
     nit              VARCHAR(15) UNIQUE,               -- opcional
     municipio_id     INTEGER     NOT NULL REFERENCES municipio(id),
     tipo_residuo_id  SMALLINT    NOT NULL REFERENCES tipo_residuo(id),
@@ -109,11 +110,13 @@ CREATE TABLE escenario (
     nombre               VARCHAR(100)  NOT NULL,
     descripcion          TEXT,
     alfa_cop_t_km        NUMERIC(12,2) NOT NULL,                    -- α
+    factor_transporte_pct NUMERIC(10,6) NOT NULL DEFAULT 100,       -- % sobre α; costo usado = α · factor / 100
     es_base              BOOLEAN       NOT NULL DEFAULT FALSE,
     creado_en            TIMESTAMPTZ   NOT NULL DEFAULT now(),
     actualizado_en       TIMESTAMPTZ   NOT NULL DEFAULT now(),
     CONSTRAINT uq_escenario_usuario_nombre UNIQUE (usuario_id, nombre),
-    CONSTRAINT ck_escenario_alfa CHECK (alfa_cop_t_km >= 0)
+    CONSTRAINT ck_escenario_alfa CHECK (alfa_cop_t_km >= 0),
+    CONSTRAINT ck_escenario_factor CHECK (factor_transporte_pct > 0)
 );
 
 CREATE TABLE escenario_empresa (
@@ -360,7 +363,7 @@ CREATE TRIGGER tg_escenario_actualizado
 -- =====================================================================
 --  11. VISTAS (valores derivados que NO se almacenan, por 3FN)
 -- =====================================================================
--- c_ij = α · d_ij + p_j   (matriz de costos unitarios por escenario)
+-- c_ij = α · (factor/100) · d_ij + p_j + β_i   (matriz de costos unitarios por escenario)
 CREATE VIEW v_costo_unitario AS
 SELECT  e.id                    AS escenario_id,
         e.nombre                AS escenario,
@@ -371,8 +374,11 @@ SELECT  e.id                    AS escenario_id,
         ep.demanda_t_semana     AS demanda,
         r.distancia_km,
         e.alfa_cop_t_km         AS alfa,
+        e.factor_transporte_pct AS factor_transporte,
         ep.costo_operacion_cop_t AS costo_operacion,
-        (e.alfa_cop_t_km * r.distancia_km + ep.costo_operacion_cop_t)::NUMERIC(14,2) AS costo_unitario_cop_t,
+        ee.precio_tonelada_cop  AS precio_compra,
+        (e.alfa_cop_t_km * e.factor_transporte_pct / 100 * r.distancia_km
+         + ep.costo_operacion_cop_t + ee.precio_tonelada_cop)::NUMERIC(14,2) AS costo_unitario_cop_t,
         r.habilitada
 FROM ruta r
 JOIN escenario_empresa ee ON ee.id = r.escenario_empresa_id
@@ -404,7 +410,7 @@ INSERT INTO rol (nombre, descripcion) VALUES
   ('ANALISTA', 'Gestiona escenarios, ejecuta el modelo exacto y el AG, y realiza el análisis de sensibilidad');
 
 INSERT INTO metodo_solucion (nombre, descripcion) VALUES
-  ('EXACTO_HIGHS',       'Programación lineal resuelta con HiGHS (highspy)'),
+  ('EXACTO_SIMPLEX',     'Método Simplex de dos fases'),
   ('ALGORITMO_GENETICO', 'Metaheurística: Algoritmo Genético');
 
 INSERT INTO estado_ejecucion (nombre) VALUES
@@ -448,9 +454,9 @@ WHERE d.codigo_dane = '50';
 -- 12.4 Tipos de residuo (Tabla 2.1 del documento de la Fase 1)
 INSERT INTO tipo_residuo (nombre) VALUES
   ('Raquis y fibra de palma'),
-  ('Cuesco de palmito y raquis de palma'),
-  ('Biomasa de poda foliar en cultivo'),
-  ('Fibra vegetal y residuos de prensado'),
+  ('Cuesco y raquis de palma'),
+  ('Biomasa de poda foliar'),
+  ('Fibra y residuos de prensado'),
   ('Tamo y cascarilla de arroz'),
   ('Cascarilla de arroz'),
   ('Estiércol porcino/bovino'),
@@ -459,20 +465,20 @@ INSERT INTO tipo_residuo (nombre) VALUES
   ('Estiércol de bovinos');
 
 -- 12.5 Empresas (orígenes)
-INSERT INTO empresa (codigo, municipio_id, tipo_residuo_id)
-SELECT v.codigo, m.id, t.id
+INSERT INTO empresa (codigo, nombre, municipio_id, tipo_residuo_id)
+SELECT v.codigo, v.nombre, m.id, t.id
 FROM (VALUES
-  ('E1',  'San Carlos de Guaroa', 'Raquis y fibra de palma'),
-  ('E2',  'Cumaral',              'Cuesco de palmito y raquis de palma'),
-  ('E3',  'Puerto Gaitán',        'Biomasa de poda foliar en cultivo'),
-  ('E4',  'Cumaral',              'Fibra vegetal y residuos de prensado'),
-  ('E5',  'Villavicencio',        'Tamo y cascarilla de arroz'),
-  ('E6',  'Villavicencio',        'Cascarilla de arroz'),
-  ('E7',  'Puerto López',         'Estiércol porcino/bovino'),
-  ('E8',  'Puerto López',         'Biomasa maderable'),
-  ('E9',  'Puerto López',         'Bagazo de caña de azúcar'),
-  ('E10', 'Villavicencio',        'Estiércol de bovinos')
-) AS v(codigo, municipio, residuo)
+  ('E1', 'Palmeras del Llano S.A.S.',  'San Carlos de Guaroa', 'Raquis y fibra de palma'),
+  ('E2', 'Unipalma de Los Llanos S.A.',  'Cumaral',              'Cuesco y raquis de palma'),
+  ('E3', 'Poligrow Colombia S.A.S.',  'Puerto Gaitán',        'Biomasa de poda foliar'),
+  ('E4', 'Aceites Cumaral S.A.S.',  'Cumaral',              'Fibra y residuos de prensado'),
+  ('E5', 'Comercializadora del Llano S.A.',  'Villavicencio',        'Tamo y cascarilla de arroz'),
+  ('E6', 'Molinos Roa S.A.',  'Villavicencio',        'Cascarilla de arroz'),
+  ('E7', 'Agropecuaria Aliar S.A.',  'Puerto López',         'Estiércol porcino/bovino'),
+  ('E8', 'Refocosta S.A.',  'Puerto López',         'Biomasa maderable'),
+  ('E9', 'Bioenergy S.A.S.',  'Puerto López',         'Bagazo de caña de azúcar'),
+  ('E10', 'Frigollano S.A.', 'Villavicencio',        'Estiércol de bovinos')
+) AS v(codigo, nombre, municipio, residuo)
 JOIN municipio    m ON m.nombre = v.municipio
 JOIN tipo_residuo t ON t.nombre = v.residuo
 ORDER BY length(v.codigo), v.codigo;
@@ -491,9 +497,7 @@ ORDER BY v.codigo;
 
 -- 12.7 Escenario "Caso base" (α = 750 COP/(t·km))
 INSERT INTO escenario (usuario_id, nombre, descripcion, alfa_cop_t_km, es_base)
-SELECT u.id, 'Caso base',
-       'Caso base de la Fase 1: 10 empresas, 4 plantas, problema balanceado (1.250 = 1.250 t/semana)',
-       750, TRUE
+SELECT u.id, 'Caso base', NULL, 750, TRUE
 FROM usuario u WHERE u.username = 'analista';
 
 -- 12.8 Oferta O_i y precio β_i por empresa

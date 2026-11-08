@@ -1,15 +1,15 @@
 <div align="center">
 
-<img src="assets/logo/logo-hoja.svg" alt="Nexus Analytics · EcoResiduos" width="90"/>
+<img src="assets/logo/ecoresiduos.svg" alt="EcoResiduos" width="320"/>
 
 # Nexus Analytics · EcoResiduos
 
 **Sistema web de optimización de la red logística de recepción y procesamiento de residuos agropecuarios**
 
-Modelos de redes · Problema de transporte · Simplex propio · Algoritmos genéticos · Análisis de sensibilidad
+Modelos de redes · Problema de transporte · Simplex de dos fases · Algoritmos genéticos · Análisis de sensibilidad
 
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
-![Streamlit](https://img.shields.io/badge/Streamlit-web%20app-FF4B4B?logo=streamlit&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.50%2B-FF4B4B?logo=streamlit&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-4169E1?logo=postgresql&logoColor=white)
 ![NumPy](https://img.shields.io/badge/NumPy-cálculo-013243?logo=numpy&logoColor=white)
 ![Licencia](https://img.shields.io/badge/licencia-MIT-green)
@@ -34,8 +34,8 @@ Modelos de redes · Problema de transporte · Simplex propio · Algoritmos gené
 8. [Descripción de los módulos](#8-descripción-de-los-módulos)
 9. [Modelo matemático](#9-modelo-matemático)
 10. [Base de datos](#10-base-de-datos)
-11. [Instalación y configuración](#11-instalación-y-configuración)
-12. [Ejecución](#12-ejecución)
+11. [Instalación y despliegue en desarrollo (Windows)](#11-instalación-y-despliegue-en-desarrollo-windows)
+12. [Uso](#12-uso)
 13. [Requerimientos no funcionales clave](#13-requerimientos-no-funcionales-clave)
 14. [Hoja de ruta](#14-hoja-de-ruta)
 15. [Equipo y roles](#15-equipo-y-roles)
@@ -62,6 +62,8 @@ EcoResiduos del Llano S.A.S. valoriza residuos agropecuarios (biomasa, subproduc
 | Oferta total semanal | 1.250 t |
 | Demanda total semanal | 1.250 t (problema balanceado) |
 | Costo de transporte | α = 750 COP por tonelada-kilómetro |
+| Precio por tonelada a cada empresa | β<sub>i</sub> = 12.000 COP/t (igual para todas en el caso base) |
+| Costo unitario por ruta | c<sub>ij</sub> = α·d<sub>ij</sub> + p<sub>j</sub> + β<sub>i</sub> |
 | Arcos de la red | 40 rutas empresa → planta |
 
 La asignación empírica de rutas genera sobrecostos operativos. El sistema determina la distribución óptima de los flujos de residuos y permite **ampliar empresas y sedes**, **modificar los coeficientes del negocio** y **simular escenarios** de variación en oferta, demanda y costos.
@@ -84,11 +86,11 @@ La asignación empírica de rutas genera sobrecostos operativos. El sistema dete
 |---|---|---|
 | Autenticación | Inicio de sesión con usuario y contraseña (rol **analista**) | — |
 | Datos de la red | Gestión de empresas, plantas, rutas, distancias, ofertas y demandas | RF01 – RF04 |
-| Parámetros | Coeficientes del negocio: α, precio de la tonelada (β), costo de operación (p<sub>j</sub>) | RF05 |
+| Parámetros | Coeficientes del negocio: costo de transporte y su factor, precio por tonelada de cada empresa (β<sub>i</sub>), costo de operación (p<sub>j</sub>) | RF05 |
 | Importar / exportar | Carga y descarga de datos en CSV, XLSX y JSON | RF06 |
 | Red logística | Construcción y visualización del grafo G = (V, A) | RF07 |
 | Validación | Consistencia de datos y balance oferta–demanda con nodo ficticio | RF08 |
-| Método exacto | Resolución con Simplex propio, verificación de factibilidad | RF09, RF10 |
+| Método exacto | Resolución con Simplex de dos fases, verificación de factibilidad | RF09, RF10 |
 | Algoritmo Genético | Parámetros configurables, ejecución, múltiples corridas y estadísticas | RF11 – RF13 |
 | Resultados | Flujos por arco, costo total y utilización de las plantas | RF14 |
 | Sensibilidad | Precios sombra, costos reducidos y rangos de variación | RF15 |
@@ -131,6 +133,7 @@ flowchart LR
 - **Capa de servicios:** `services/` conecta la interfaz con los algoritmos y con la persistencia.
 - **Persistencia con ORM:** `database.py` centraliza la conexión y los modelos ORM; ningún módulo escribe SQL directamente.
 - **Escenarios inmutables:** las simulaciones crean escenarios nuevos y nunca alteran los datos originales (RNF10).
+- **Patrón Singleton:** la configuración (`Settings`), la conexión a la base de datos (`Database`) y los servicios (`AuthService`, `ScenarioService`, `NetworkService`, `OptimizationService`) usan la metaclase `SingletonMeta` (`backend/utils/singleton.py`). Así toda la aplicación comparte un único motor de conexiones y una única instancia de cada servicio, aunque Streamlit atienda varias sesiones en hilos distintos.
 
 ## 6. Stack tecnológico
 
@@ -156,8 +159,9 @@ nexus-analytics-eco-residuos/
 │   └── config.toml                  # Tema y configuración de Streamlit
 ├── assets/
 │   ├── icons/                       # Iconos SVG de navegación, KPIs, acciones y tema
-│   ├── images/                      # Imágenes de la aplicación
-│   └── logo/                        # Logotipo
+│   ├── fonts/                       # Tipografía Inter (uso sin conexión, RNF12)
+│   ├── images/                      # Imágenes de la aplicación (login.avif)
+│   └── logo/                        # Logotipo (ecoresiduos.svg) e ícono de la pestaña (icon.svg)
 ├── backend/
 │   ├── __init__.py
 │   ├── config.py                    # Carga de variables de entorno y constantes globales
@@ -166,12 +170,12 @@ nexus-analytics-eco-residuos/
 │   ├── network/                     # Fase 1 · Modelado de la red
 │   │   ├── __init__.py
 │   │   ├── graph_builder.py         # Grafo dirigido G = (V, A) con NetworkX
-│   │   ├── cost_matrix.py           # Matriz de costos c_ij = α·d_ij + p_j
+│   │   ├── cost_matrix.py           # Matriz de costos c_ij = α·d_ij + p_j + β_i
 │   │   └── balance.py               # Validación de datos, balance y nodos ficticios
 │   ├── exact/                       # Fase 2 · Solución exacta
 │   │   ├── __init__.py
 │   │   ├── transport_model.py       # Formulación del PL: vector c, matriz A, vector b
-│   │   ├── simplex.py               # Algoritmo Simplex propio (NumPy)
+│   │   ├── simplex.py               # Método Simplex de dos fases (NumPy)
 │   │   └── solution_validator.py    # Verificación de factibilidad (tolerancia 1e-6)
 │   ├── genetic/                     # Fase 3 · Algoritmo Genético
 │   │   ├── __init__.py
@@ -205,6 +209,7 @@ nexus-analytics-eco-residuos/
 │   │   └── comparison_service.py    # Comparaciones y reportes
 │   └── utils/
 │       ├── __init__.py
+│       ├── singleton.py             # Metaclase SingletonMeta
 │       ├── exceptions.py            # Excepciones del dominio (infactible, no acotado…)
 │       ├── timer.py                 # Medición de tiempos de ejecución
 │       └── logger.py                # Registro de eventos
@@ -217,15 +222,19 @@ nexus-analytics-eco-residuos/
 │   │   ├── empresas.py              # Gestión de empresas (orígenes)
 │   │   ├── plantas.py               # Gestión de plantas (destinos)
 │   │   ├── rutas_costos.py          # Distancias y matriz de costos
-│   │   ├── parametros.py            # α, β, p_j, ofertas y demandas
+│   │   ├── parametros.py            # Costo de transporte, factor, ofertas, precios, demandas y costos
 │   │   ├── red_logistica.py         # Visualización del grafo
-│   │   ├── escenarios.py            # Escenarios guardados e importación/exportación
+│   │   ├── escenarios.py            # Escenarios guardados: buscar, abrir, duplicar y crear
 │   │   ├── metodo_exacto.py         # Ejecución y resultados del Simplex
 │   │   ├── algoritmo_genetico.py    # Parámetros, ejecución y convergencia del AG
 │   │   ├── sensibilidad.py          # Precios sombra, rangos y simulaciones
 │   │   └── comparacion.py           # Reporte comparativo exacto vs. AG
 │   ├── components/
 │   │   ├── __init__.py
+│   │   ├── header.py                # Barra superior: título, escenario activo, tema y usuario
+│   │   ├── session.py               # Escenario activo y avisos entre páginas
+│   │   ├── icons.py                 # Íconos de línea de la interfaz
+│   │   ├── formatters.py            # Formato numérico colombiano
 │   │   ├── login_form.py            # Formulario de inicio de sesión
 │   │   ├── auth_guard.py            # Protección de páginas sin sesión
 │   │   ├── sidebar.py               # Menú lateral con iconos
@@ -234,10 +243,12 @@ nexus-analytics-eco-residuos/
 │   │   ├── network_graph.py         # Render del grafo y de los flujos
 │   │   ├── charts.py                # Gráficas de convergencia, sensibilidad y comparación
 │   │   └── data_tables.py           # Tablas editables y de resultados
-│   └── styles/
-│       └── main.css                 # Estilos personalizados
+│   ├── styles/
+│   │   └── main.css                 # Estilos personalizados (temas claro y oscuro)
+│   └── templates/
+│       └── red_interactiva.html     # Grafo interactivo sobre el mapa (simulación de fuerzas)
 ├── database/
-│   └── ecoresiduos_db.sql           # Script DDL + datos del caso base
+│   └── ecoresiduos_db.sql           # Script DDL completo + datos del caso base
 ├── data/
 │   └── samples/                     # Datos de prueba regionales (CSV, XLSX, JSON)
 ├── docs/                            # Enunciado, requerimientos, Fase 1 y MER
@@ -258,7 +269,7 @@ nexus-analytics-eco-residuos/
 | `database.py` | Crea el *engine* y la sesión de SQLAlchemy y declara los modelos ORM que mapean las 25 tablas del MER. El resto del sistema manipula la BD a través de estos objetos, sin escribir consultas SQL. | — |
 | `auth.py` | Valida usuario y contraseña contra `usuario.password_hash` (bcrypt). Solo login básico: sin registro ni recuperación de contraseña. | — |
 | `network/` | Construye el grafo bipartito dirigido con NetworkX, calcula la matriz c<sub>ij</sub> y valida el balance; si ΣO<sub>i</sub> ≠ ΣD<sub>j</sub> agrega la empresa o planta ficticia. | 1 |
-| `exact/` | Traduce la red a un modelo de PL en forma matricial y lo resuelve con un **Simplex propio** sobre NumPy; entrega el estado (óptimo, infactible, no acotado), x<sub>ij</sub>, Z, el tiempo y la base óptima. `solution_validator.py` comprueba oferta, demanda y no negatividad. | 2 |
+| `exact/` | Traduce la red a un modelo de PL en forma matricial y lo resuelve con un **Simplex de dos fases** sobre NumPy; entrega el estado (óptimo, infactible, no acotado), x<sub>ij</sub>, Z, el tiempo y la base óptima. `solution_validator.py` comprueba oferta, demanda y no negatividad. | 2 |
 | `genetic/` | AG con cromosoma de asignación de flujos, aptitud = 1 / (costo + penalización por violación de capacidad), selección por ruleta o torneo, cruce de uno o dos puntos, mutación, semilla reproducible y múltiples corridas. | 3 |
 | `sensitivity/` | A partir de la tabla final del Simplex calcula precios sombra, costos reducidos y rangos de variación de c<sub>ij</sub>, O<sub>i</sub> y D<sub>j</sub> que no alteran la base óptima; simula escenarios porcentuales. | 4 |
 | `comparison/` | Calcula costo, tiempo y gap % = (Z<sub>AG</sub> − Z<sub>exacto</sub>) / Z<sub>exacto</sub> × 100 y arma el reporte comparativo. | 4 |
@@ -273,9 +284,9 @@ nexus-analytics-eco-residuos/
 | Inicio | KPIs del escenario activo: costo total, toneladas, gap | — |
 | Empresas / Plantas | CRUD de orígenes y destinos | HU-01 |
 | Rutas y costos | Matriz de distancias y de costos unitarios | HU-02 |
-| Parámetros | α, β, p<sub>j</sub>, ofertas, demandas y balance | HU-02, HU-03 |
+| Parámetros | Costo de transporte, factor, ofertas, precios por tonelada, demandas y balance | HU-02, HU-03 |
 | Red logística | Grafo interactivo de la red | HU-05 |
-| Escenarios | Guardar, recuperar, importar y exportar | HU-04, HU-10 |
+| Escenarios | Buscar, abrir, duplicar y crear escenarios derivados | HU-04, HU-10 |
 | Método exacto | Ejecución del Simplex y resultados | HU-06, HU-08 |
 | Algoritmo genético | Parámetros, ejecución, convergencia y estadísticas | HU-07, HU-08 |
 | Sensibilidad | Precios sombra, rangos y simulación de escenarios | HU-09, HU-10 |
@@ -285,7 +296,11 @@ nexus-analytics-eco-residuos/
 
 Grafo bipartito dirigido $G = (V, A)$ con $V = V_O \cup V_D$ (empresas y plantas) y $A = V_O \times V_D$.
 
-**Parámetros:** oferta $O_i$, demanda $D_j$, distancia $d_{ij}$, costo de transporte $\alpha$, costo de operación $p_j$ y costo unitario $c_{ij} = \alpha\, d_{ij} + p_j$.
+**Parámetros:** oferta $O_i$, demanda $D_j$, distancia $d_{ij}$, costo de transporte $\alpha$, costo de operación $p_j$ y precio por tonelada pagado a cada empresa $\beta_i$. El costo unitario de cada ruta es
+
+$$
+c_{ij} = \alpha\, d_{ij} + p_j + \beta_i
+$$
 
 **Variables:** $x_{ij} \ge 0$, toneladas semanales enviadas de la empresa $i$ a la planta $j$.
 
@@ -298,7 +313,13 @@ $$
 \end{aligned}
 $$
 
+Como $c_{ij}$ ya incluye la compra, $Z$ es el costo total semanal (compra, transporte y operación). En el caso base ($\alpha = 750$, $\beta_i = 12.000$ para todas las empresas) el óptimo es **Z = 120.472.500 COP**: transporte 51.772.500, operación 53.700.000 y compra 15.000.000.
+
+**Factor de costo de transporte:** cada escenario guarda su costo de transporte base $\alpha$ y un factor en porcentaje. El modelo usa $\alpha \cdot \text{factor} / 100$. En la página Parámetros el costo y el factor están enlazados: al cambiar uno se recalcula el otro.
+
 Si el problema no está balanceado se agrega una empresa ficticia $E_{m+1}$ o una planta ficticia $P_{n+1}$ con costo cero. El desarrollo completo está en `docs/Fase1_Modelado_Red_Logistica.docx`.
+
+> La interfaz está pensada para un usuario final: muestra los datos con nombres y unidades (t/semana, COP/t, COP/t·km, km), sin símbolos ni fórmulas.
 
 ## 10. Base de datos
 
@@ -315,48 +336,80 @@ Modelo entidad-relación normalizado hasta **tercera forma normal** (`docs/MER_E
 | Comparación | `comparacion` |
 | Catálogos | `metodo_solucion`, `estado_ejecucion`, `metodo_seleccion`, `tipo_cruce`, `tipo_parametro` |
 
-**Vistas:** `v_costo_unitario` (c<sub>ij</sub> por escenario) y `v_comparacion` (Z exacto, Z AG, gap % y tiempos). Los valores derivados no se almacenan.
+**Dónde vive cada dato del modelo**
 
-**Datos iniciales:** el script `database/ecoresiduos_db.sql` carga los catálogos, el escenario **Caso base** de la Fase 1 (10 empresas, 4 plantas y 40 rutas) y un usuario analista por defecto.
+| Dato | Tabla y columna | Por qué ahí |
+|---|---|---|
+| Nombre, NIT, municipio y tipo de residuo de la empresa | `empresa` | Datos fijos de la empresa |
+| Oferta semanal $O_i$ | `escenario_empresa.oferta_t_semana` | Cambia entre escenarios |
+| Precio por tonelada $\beta_i$ | `escenario_empresa.precio_tonelada_cop` | Cambia entre escenarios sin alterar el caso base |
+| Demanda $D_j$ y costo de operación $p_j$ | `escenario_planta` | Cambian entre escenarios |
+| Costo de transporte $\alpha$ y factor | `escenario.alfa_cop_t_km`, `escenario.factor_transporte_pct` | Propios de cada escenario |
+| Distancia $d_{ij}$ | `ruta.distancia_km` | Una por par empresa–planta del escenario |
 
-## 11. Instalación y configuración
+**Vistas:** `v_costo_unitario` (c<sub>ij</sub> por escenario, con el factor y el precio por tonelada) y `v_comparacion` (Z exacto, Z AG, gap % y tiempos). Los valores derivados no se almacenan.
 
-### 11.1 Requisitos previos
+**Datos iniciales:** el script `database/ecoresiduos_db.sql` crea toda la base desde cero y carga los catálogos, el escenario **Caso base** de la Fase 1 (10 empresas con su nombre, 4 plantas y 40 rutas) y un usuario analista por defecto. Es reejecutable: elimina y vuelve a crear todos los objetos, así que **borra los datos existentes**.
 
-- Python 3.11 o superior
-- PostgreSQL 14 o superior
-- Git
+## 11. Instalación y despliegue en desarrollo (Windows)
 
-### 11.2 Clonar el repositorio y crear el entorno virtual
+Guía para dejar el proyecto funcionando desde cero en un equipo con Windows.
 
-```bash
+### 11.1 Programas necesarios
+
+| Programa | Versión | Descarga |
+|---|---|---|
+| Python | 3.11 o superior (marcar **Add python.exe to PATH** al instalar) | https://www.python.org/downloads/ |
+| PostgreSQL con pgAdmin 4 | 14 o superior (el instalador incluye pgAdmin) | https://www.postgresql.org/download/windows/ |
+| Git | Cualquiera reciente | https://git-scm.com/download/win |
+
+Durante la instalación de PostgreSQL se define la contraseña del usuario `postgres`; guárdela, se usa más adelante. Deje el puerto por defecto, `5432`.
+
+Para comprobar las instalaciones, abra **PowerShell** y ejecute:
+
+```powershell
+python --version
+git --version
+```
+
+### 11.2 Crear la base de datos con pgAdmin 4
+
+1. Abra **pgAdmin 4** y, en el panel izquierdo, despliegue **Servers → PostgreSQL**. Escriba la contraseña del usuario `postgres` si la pide.
+2. Clic derecho sobre **Databases → Create → Database…**
+3. En **Database** escriba `ecoresiduos`. En la pestaña **Definition** deje **Encoding** en `UTF8`. Pulse **Save**.
+4. Seleccione la base `ecoresiduos` recién creada y abra **Tools → Query Tool**, o clic derecho → **Query Tool**.
+5. En la barra del Query Tool pulse **Open File** (ícono de carpeta) y elija `database/ecoresiduos_db.sql` del proyecto.
+6. Pulse **Execute** (ícono ▶ o tecla **F5**). Al final debe aparecer el mensaje *Query returned successfully*. Los avisos `NOTICE: ... does not exist, skipping` son normales la primera vez.
+7. Para verificar, despliegue **ecoresiduos → Schemas → public → Tables**: deben aparecer 25 tablas; si no se ven, clic derecho → **Refresh**. Para ver los datos de una tabla: clic derecho → **View/Edit Data → All Rows**.
+
+### 11.3 Descargar el proyecto y crear el entorno virtual
+
+En PowerShell, dentro de la carpeta donde quiera el proyecto:
+
+```powershell
 git clone https://github.com/freddy-vc/nexus-analytics-eco-residuos.git
 cd nexus-analytics-eco-residuos
 
 python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# Linux / macOS
-source .venv/bin/activate
+.venv\Scripts\Activate.ps1
+```
 
+> Si PowerShell bloquea la activación con un error de *ejecución de scripts deshabilitada*, ejecute una vez `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` y vuelva a activar. En la consola clásica (cmd) use `.venv\Scripts\activate.bat`.
+
+Con el entorno activo (el prompt muestra `(.venv)`), instale las librerías:
+
+```powershell
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 11.3 Crear la base de datos
+### 11.4 Configurar la conexión (archivo `.env`)
 
-```bash
-psql -U postgres -c "CREATE DATABASE ecoresiduos ENCODING 'UTF8';"
-psql -U postgres -d ecoresiduos -f database/ecoresiduos_db.sql
-```
+Copie la plantilla y edítela con los datos de su PostgreSQL:
 
-El script es reejecutable: elimina y vuelve a crear todos los objetos.
-
-### 11.4 Variables de entorno
-
-Copiar la plantilla y completar los datos de conexión:
-
-```bash
-cp .env.example .env
+```powershell
+copy .env.example .env
+notepad .env
 ```
 
 | Variable | Descripción | Ejemplo |
@@ -365,24 +418,38 @@ cp .env.example .env
 | `DB_PORT` | Puerto | `5432` |
 | `DB_NAME` | Nombre de la base de datos | `ecoresiduos` |
 | `DB_USER` | Usuario de la base de datos | `postgres` |
-| `DB_PASSWORD` | Contraseña de la base de datos | — |
+| `DB_PASSWORD` | Contraseña definida al instalar PostgreSQL | — |
 | `APP_ENV` | Entorno de ejecución | `development` |
+| `APP_SECRET` | Clave para firmar la cookie de sesión (opcional; si se omite se deriva de la conexión) | una cadena larga y aleatoria |
 
-## 12. Ejecución
+El archivo `.env` contiene contraseñas: está en `.gitignore` y no debe subirse al repositorio.
 
-Desde la raíz del proyecto:
+### 11.5 Levantar la aplicación
 
-```bash
+Desde la raíz del proyecto, con el entorno virtual activo:
+
+```powershell
 streamlit run frontend/app.py
 ```
 
-La aplicación se abre en `http://localhost:8501`.
+La aplicación se abre en `http://localhost:8501`. Para detenerla pulse **Ctrl + C** en la terminal. Después de cambiar código del backend, detenga y vuelva a ejecutar el comando.
 
 | Usuario | Contraseña | Rol |
 |---|---|---|
 | `analista` | `Analista2026*` | Analista |
 
-> Cambiar la contraseña por defecto antes de cualquier despliegue.
+> Cambiar la contraseña por defecto antes de cualquier despliegue. Tras 3 intentos fallidos la cuenta se bloquea durante 1 hora.
+
+### 11.6 Problemas frecuentes
+
+| Síntoma | Causa y solución |
+|---|---|
+| «No fue posible conectar con PostgreSQL» | El servicio de PostgreSQL no está iniciado o los datos de `.env` no coinciden. Revise usuario, contraseña, puerto y que exista la base `ecoresiduos`. |
+| `streamlit` no se reconoce como comando | El entorno virtual no está activo: ejecute `.venv\Scripts\Activate.ps1`. |
+| Error de columnas inexistentes (`nombre`, `factor_transporte_pct`) | La base se creó con una versión anterior del script: vuelva a ejecutar `database/ecoresiduos_db.sql` (borra y recrea los datos). |
+| `ConnectionResetError: [WinError 10054]` en la consola | Aviso de asyncio en Windows al cerrar una pestaña; no afecta a la aplicación. |
+
+## 12. Uso
 
 **Flujo de uso sugerido**
 
@@ -390,9 +457,9 @@ La aplicación se abre en `http://localhost:8501`.
 2. Revisar o ajustar empresas, plantas, rutas y parámetros del **Caso base**.
 3. Visualizar la red logística y validar el balance.
 4. Resolver con el **método exacto**.
-5. Configurar y ejecutar el **Algoritmo Genético** (una o varias corridas).
-6. Realizar el **análisis de sensibilidad** y simular escenarios.
-7. Generar y exportar el **reporte comparativo**.
+5. Crear escenarios derivados en **Escenarios** (duplicar o «+ Nuevo escenario»), ajustar sus parámetros y resolverlos.
+6. Configurar y ejecutar el **Algoritmo Genético** (fase 3).
+7. Realizar el **análisis de sensibilidad** y generar el **reporte comparativo** (fase 4).
 
 ## 13. Requerimientos no funcionales clave
 
@@ -401,7 +468,7 @@ La aplicación se abre en `http://localhost:8501`.
 | RNF01 | Rendimiento | Método exacto < 5 s en la instancia base; AG < 60 s con parámetros por defecto; interfaz < 2 s |
 | RNF02 | Escalabilidad | Al menos 100 empresas y 20 plantas sin modificar el código |
 | RNF04 | Modularidad | Módulos independientes: exacto, genético, interfaz y sensibilidad |
-| RNF05 | Tecnología | Simplex de construcción propia, entorno web, PostgreSQL y `requirements.txt` |
+| RNF05 | Tecnología | Método Simplex sin librerías de optimización, entorno web, PostgreSQL y `requirements.txt` |
 | RNF06 | Exactitud | Restricciones satisfechas con tolerancia ≤ 1e-6 |
 | RNF07 | Reproducibilidad | Semilla configurable y parámetros del AG registrados |
 | RNF10 | Integridad | Las simulaciones no alteran los datos originales |
@@ -413,7 +480,7 @@ La aplicación se abre en `http://localhost:8501`.
 - [x] **Fase 1 · Modelado de la red:** grafo G = (V, A), parámetros y modelo de programación lineal.
 - [x] Modelo entidad-relación (3FN) y script de base de datos.
 - [x] Estructura del proyecto.
-- [ ] **Fase 2 · Solución exacta:** Simplex propio y validación de factibilidad.
+- [x] **Fase 2 · Solución exacta:** Simplex de dos fases con el costo de compra incluido, validación de factibilidad, interfaz de datos y resultados, y página de Escenarios.
 - [ ] **Fase 3 · Metaheurística:** Algoritmo Genético y múltiples corridas.
 - [ ] **Fase 4 · Interfaz, sensibilidad y comparación:** páginas de Streamlit, precios sombra, rangos, escenarios y reporte comparativo.
 - [ ] Informe técnico en formato IEEE y sustentación.
@@ -422,10 +489,10 @@ La aplicación se abre en `http://localhost:8501`.
 
 | Rol | Responsabilidades | Integrante |
 |---|---|---|
-| Líder de proyecto / Analista de negocio | Coordinación, cronograma, informe IEEE y validación de restricciones del negocio | *Por definir* |
-| Ingeniero de modelado y optimización | Formulación matemática y módulo exacto (`network/`, `exact/`) | *Por definir* |
-| Desarrollador de metaheurísticas | Diseño y ajuste del Algoritmo Genético (`genetic/`) | *Por definir* |
-| Desarrollador de software e interfaz | Arquitectura, interfaz y módulos de sensibilidad y reportes (`frontend/`, `sensitivity/`, `comparison/`) | *Por definir* |
+| Líder de proyecto / Analista de negocio | Coordinación, cronograma, informe IEEE y validación de restricciones del negocio | Angie Yessenia Gutierrez Guerrero|
+| Ingeniero de modelado y optimización | Formulación matemática y módulo exacto (`network/`, `exact/`) | Cristian Fernando Muñoz Martinez |
+| Desarrollador de metaheurísticas | Diseño y ajuste del Algoritmo Genético (`genetic/`) | Freddy Leonardo Vega Cisneros |
+| Desarrollador de software e interfaz | Arquitectura, interfaz y módulos de sensibilidad y reportes (`frontend/`, `sensitivity/`, `comparison/`) | Juan Nicolas Cabrera Miranda |
 
 ## 16. Flujo de trabajo con Git
 
@@ -452,7 +519,7 @@ Se trabaja con ramas por módulo, como exige el proyecto:
 | `docs/Requerimientos.docx` | Requerimientos funcionales, no funcionales e historias de usuario |
 | `docs/Fase1_Modelado_Red_Logistica.docx` | Modelado de la red y modelo de programación lineal |
 | `docs/MER_EcoResiduos.drawio` | Modelo entidad-relación (abrir con [draw.io](https://app.diagrams.net)) |
-| `database/ecoresiduos_db.sql` | Script DDL y datos del caso base |
+| `database/ecoresiduos_db.sql` | Script DDL completo y datos del caso base |
 
 ## 18. Licencia
 

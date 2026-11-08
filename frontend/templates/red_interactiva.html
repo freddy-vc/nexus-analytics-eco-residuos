@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; color: var(--tx); }
+  #lienzo { position: relative; border-radius: 14px; background: var(--sf2); overflow: hidden; }
+  #red { display: block; width: 100%; touch-action: none; user-select: none; }
+  .nodo { cursor: grab; }
+  .nodo.arrastrando { cursor: grabbing; }
+  .nodo:focus { outline: none; }
+  .arista-zona { stroke: transparent; stroke-width: 14; cursor: pointer; }
+  .atenuado { opacity: .15; transition: opacity .15s; }
+  #info {
+    position: absolute; pointer-events: none; background: var(--sf); color: var(--tx);
+    border: 1px solid var(--bd); border-radius: 10px; padding: 8px 12px; font-size: 12px;
+    line-height: 1.5; box-shadow: 0 6px 20px rgba(0,0,0,.12); display: none; white-space: nowrap; z-index: 2;
+  }
+  #info strong { font-size: 13px; }
+  #restablecer {
+    margin-left: auto; font-family: inherit; font-size: 12px; font-weight: 600;
+    color: var(--tx); background: var(--sf); border: 1px solid var(--bd); border-radius: 9px;
+    padding: 8px 12px; cursor: pointer;
+  }
+  #restablecer:hover { opacity: .85; }
+  #leyenda { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; font-size: 13px; color: var(--mu); padding: 14px 2px 0; }
+  #leyenda span { display: flex; align-items: center; gap: 8px; }
+  .muestra { flex: none; }
+</style>
+</head>
+<body>
+<div id="lienzo">
+  <svg id="red" role="img" aria-label="Red logística sobre el mapa del Meta"></svg>
+  <div id="info"></div>
+</div>
+<div id="leyenda"></div>
+<script>
+const DATOS = __DATOS__;
+const P = DATOS.paleta;
+const NS = "http://www.w3.org/2000/svg";
+for (const [clave, valor] of Object.entries(P)) document.documentElement.style.setProperty(`--${clave}`, valor);
+
+const svg = document.getElementById("red");
+const info = document.getElementById("info");
+const ALTO = DATOS.alto;
+const MARGEN = 64;
+const RADIO = { empresa: 20, planta: 27 };
+const MEDIO_ANCHO_ETIQUETA = 58;
+const ALTO_ETIQUETA = 38;
+const SEPARACION = 10;
+const HOLGURA_ARISTA = 14;
+const fmt = (v, d = 0) => Number(v).toLocaleString("es-CO", { maximumFractionDigits: d });
+
+const nodos = DATOS.nodos.map(n => ({ ...n, r: RADIO[n.tipo], ancla: { x: n.x, y: n.y }, geo: { x: n.x, y: n.y } }));
+const porId = Object.fromEntries(nodos.map(n => [n.id, n]));
+const aristas = DATOS.aristas.map(a => ({ ...a, a: porId[a.u], b: porId[a.v] }));
+const conFlujo = a => DATOS.verFlujos && a.flujo > 1e-9;
+
+let ancho = 0, escala = 1, origen = { x: 0, y: 0 }, caja = null;
+
+function medir() {
+  ancho = document.getElementById("lienzo").clientWidth;
+  svg.setAttribute("viewBox", `0 0 ${ancho} ${ALTO}`);
+  svg.setAttribute("height", ALTO);
+  if (!caja) {
+    const xs = nodos.map(n => n.geo.x), ys = nodos.map(n => n.geo.y);
+    caja = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+  }
+  const bw = Math.max(caja.x1 - caja.x0, 1e-3), bh = Math.max(caja.y1 - caja.y0, 1e-3);
+  const anterior = { escala, origen: { ...origen } };
+  escala = Math.min((ancho - 2 * MARGEN) / bw, (ALTO - 2 * MARGEN - 20) / bh);
+  origen = { x: (ancho - bw * escala) / 2 - caja.x0 * escala, y: (ALTO - 20 - bh * escala) / 2 - caja.y0 * escala };
+  for (const n of nodos) {
+    if (n.px === undefined) { [n.px, n.py] = aPixel(n.geo); continue; }
+    const g = { x: (n.px - anterior.origen.x) / anterior.escala, y: (n.py - anterior.origen.y) / anterior.escala };
+    [n.px, n.py] = aPixel(g);
+  }
+}
+const aPixel = p => [origen.x + p.x * escala, origen.y + p.y * escala];
+const aDato = (x, y) => ({ x: (x - origen.x) / escala, y: (y - origen.y) / escala });
+
+function paso(intensidad) {
+  for (const n of nodos) {
+    if (n.fijo) continue;
+    const [ax, ay] = aPixel(n.ancla);
+    n.px += (ax - n.px) * 0.05 * intensidad;
+    n.py += (ay - n.py) * 0.05 * intensidad;
+  }
+  for (let iter = 0; iter < 3; iter++) {
+    for (let i = 0; i < nodos.length; i++) for (let j = i + 1; j < nodos.length; j++) separar(nodos[i], nodos[j]);
+    for (const n of nodos) for (const a of aristas) if (a.a !== n && a.b !== n) despejar(n, a);
+    for (const n of nodos) limitar(n);
+  }
+}
+
+// Cada nodo ocupa el rectángulo de su círculo más el rótulo inferior; si dos
+// rectángulos se cruzan se separan por el eje en que el traslape es menor.
+const caja_ = n => ({ x0: n.px - Math.max(n.r, MEDIO_ANCHO_ETIQUETA), x1: n.px + Math.max(n.r, MEDIO_ANCHO_ETIQUETA),
+                      y0: n.py - n.r, y1: n.py + n.r + ALTO_ETIQUETA });
+function separar(m, n) {
+  const a = caja_(m), b = caja_(n);
+  const tx = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) + SEPARACION;
+  const ty = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) + SEPARACION;
+  if (tx <= 0 || ty <= 0) return;
+  const [pm, pn] = m.fijo ? [0, 1] : n.fijo ? [1, 0] : [0.5, 0.5];
+  if (tx < ty) {
+    const s = (n.px > m.px || (n.px === m.px && n.id > m.id)) ? 1 : -1;
+    m.px -= s * tx * pm; n.px += s * tx * pn;
+  } else {
+    const s = (n.py > m.py || (n.py === m.py && n.id > m.id)) ? 1 : -1;
+    m.py -= s * ty * pm; n.py += s * ty * pn;
+  }
+}
+
+function despejar(n, arista) {
+  const { a, b } = arista;
+  const vx = b.px - a.px, vy = b.py - a.py, largo2 = vx * vx + vy * vy;
+  if (largo2 < 1) return;
+  const t = Math.max(0, Math.min(1, ((n.px - a.px) * vx + (n.py - a.py) * vy) / largo2));
+  if (t <= 0 || t >= 1) return;
+  const qx = a.px + t * vx, qy = a.py + t * vy;
+  let dx = n.px - qx, dy = n.py - qy, d = Math.hypot(dx, dy);
+  const minimo = n.r + HOLGURA_ARISTA;
+  if (d >= minimo) return;
+  if (d < 1e-6) { const l = Math.sqrt(largo2); dx = -vy / l; dy = vx / l; d = 1; } else { dx /= d; dy /= d; }
+  const falta = minimo - d;
+  if (!n.fijo) { n.px += dx * falta * 0.7; n.py += dy * falta * 0.7; }
+  for (const [extremo, peso] of [[a, 1 - t], [b, t]]) {
+    if (extremo.fijo) continue;
+    extremo.px -= dx * falta * 0.3 * peso; extremo.py -= dy * falta * 0.3 * peso;
+  }
+}
+
+function limitar(n) {
+  const mx = Math.max(n.r, MEDIO_ANCHO_ETIQUETA) + 8;
+  n.px = Math.max(mx, Math.min(ancho - mx, n.px));
+  n.py = Math.max(n.r + 12, Math.min(ALTO - n.r - ALTO_ETIQUETA - 12, n.py));
+}
+
+const GROSOR_ARISTA = 1.4;
+
+function el(nombre, atributos = {}, padre = null) {
+  const e = document.createElementNS(NS, nombre);
+  for (const [k, v] of Object.entries(atributos)) e.setAttribute(k, v);
+  if (padre) padre.appendChild(e);
+  return e;
+}
+
+let capas = {};
+function construir() {
+  svg.innerHTML = "";
+  const defs = el("defs", {}, svg);
+  for (const [id, color] of [["flecha", P.mu], ["flecha-flujo", P.ac]]) {
+    const m = el("marker", { id, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7,
+      orient: "auto-start-reverse", markerUnits: "userSpaceOnUse" }, defs);
+    el("path", { d: "M0 0L10 5L0 10z", fill: color }, m);
+  }
+  capas.mapa = el("g", {}, svg);
+  capas.aristas = el("g", {}, svg);
+  capas.flujos = el("g", {}, svg);
+  capas.rotulos = el("g", {}, svg);
+  capas.nodos = el("g", {}, svg);
+
+  for (const a of aristas) {
+    const flujo = conFlujo(a);
+    a.linea = el("line", {
+      stroke: flujo ? P.ac : P.mu, "stroke-width": GROSOR_ARISTA,
+      "stroke-opacity": flujo ? 0.95 : (DATOS.verFlujos ? 0.25 : 0.5), "stroke-linecap": "round",
+      "marker-end": flujo ? "url(#flecha-flujo)" : (DATOS.verFlujos ? "" : "url(#flecha)"),
+    }, flujo ? capas.flujos : capas.aristas);
+    a.zona = el("line", { class: "arista-zona" }, capas.flujos);
+    a.zona.addEventListener("pointerenter", e => mostrarInfo(e, textoArista(a), a));
+    a.zona.addEventListener("pointermove", moverInfo);
+    a.zona.addEventListener("pointerleave", ocultarInfo);
+    if (flujo) {
+      a.rotulo = el("g", {}, capas.rotulos);
+      a.rotuloFondo = el("rect", { rx: 8, fill: P.sf, stroke: P.ac, "stroke-width": 1 }, a.rotulo);
+      a.rotuloTexto = el("text", { "font-size": 11, "font-weight": 700, fill: P.act, "text-anchor": "middle",
+        "dominant-baseline": "central" }, a.rotulo);
+      a.rotuloTexto.textContent = `${fmt(a.flujo, 2)} t`;
+    }
+  }
+
+  for (const n of nodos) {
+    const g = el("g", { class: "nodo", tabindex: 0 }, capas.nodos);
+    const planta = n.tipo === "planta";
+    el("circle", { r: n.r, fill: planta ? P.ac : P.sf, stroke: P.ac, "stroke-width": planta ? 0 : 2.5 }, g);
+    const codigo = el("text", { "text-anchor": "middle", "dominant-baseline": "central", "font-weight": 700,
+      "font-size": planta ? 14 : 12, fill: planta ? P.on : P.act }, g);
+    codigo.textContent = n.id;
+    const nombre = el("text", { "text-anchor": "middle", y: n.r + 15, "font-size": 12, "font-weight": 600, fill: P.tx }, g);
+    nombre.textContent = n.municipio;
+    const detalle = el("text", { "text-anchor": "middle", y: n.r + 30, "font-size": 11, fill: P.mu }, g);
+    detalle.textContent = planta ? `D = ${fmt(n.cantidad, 2)} t` : `${fmt(n.cantidad, 2)} t/sem`;
+    for (const t of [nombre, detalle]) {
+      t.setAttribute("paint-order", "stroke"); t.setAttribute("stroke", P.sf2);
+      t.setAttribute("stroke-width", 4); t.setAttribute("stroke-linejoin", "round");
+    }
+    n.grupo = g;
+    g.addEventListener("pointerdown", e => iniciarArrastre(e, n));
+    g.addEventListener("pointerenter", e => { if (!arrastrado) { resaltar(n); mostrarInfo(e, textoNodo(n)); } });
+    g.addEventListener("pointermove", moverInfo);
+    g.addEventListener("pointerleave", () => { if (!arrastrado) { resaltar(null); ocultarInfo(); } });
+  }
+  dibujarReferencias();
+}
+
+function dibujarReferencias() {
+  const g = capas.mapa;
+  g.innerHTML = "";
+  const x = ancho - 40, y = 34;
+  el("path", { d: `M${x} ${y - 14}L${x + 7} ${y + 6}L${x} ${y + 2}L${x - 7} ${y + 6}z`, fill: P.mu }, g);
+  const norte = el("text", { x, y: y + 20, "text-anchor": "middle", "font-size": 11, "font-weight": 700, fill: P.mu }, g);
+  norte.textContent = "N";
+  if (!DATOS.kmPorUnidad) return;
+  const pxPorKm = escala / DATOS.kmPorUnidad;
+  const km = [5, 10, 20, 25, 50, 100, 200].find(k => k * pxPorKm >= 70) || 200;
+  const largo = km * pxPorKm, bx = ancho - 30 - largo, by = ALTO - 26;
+  el("path", { d: `M${bx} ${by - 5}V${by}H${bx + largo}V${by - 5}`, fill: "none", stroke: P.mu, "stroke-width": 1.5 }, g);
+  const rotulo = el("text", { x: bx + largo / 2, y: by - 9, "text-anchor": "middle", "font-size": 11, fill: P.mu }, g);
+  rotulo.textContent = `${km} km`;
+}
+
+function dibujar() {
+  for (const a of aristas) {
+    const { a: o, b: d } = a;
+    const dx = d.px - o.px, dy = d.py - o.py, l = Math.hypot(dx, dy) || 1;
+    const x1 = o.px + dx / l * o.r, y1 = o.py + dy / l * o.r;
+    const x2 = d.px - dx / l * (d.r + 3), y2 = d.py - dy / l * (d.r + 3);
+    for (const linea of [a.linea, a.zona]) {
+      linea.setAttribute("x1", x1); linea.setAttribute("y1", y1);
+      linea.setAttribute("x2", x2); linea.setAttribute("y2", y2);
+    }
+    if (a.rotulo) {
+      a.rotulo.style.display = Math.hypot(x2 - x1, y2 - y1) < 90 ? "none" : "";
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      const w = a.rotuloTexto.getComputedTextLength() + 14;
+      a.rotuloFondo.setAttribute("x", mx - w / 2); a.rotuloFondo.setAttribute("y", my - 10);
+      a.rotuloFondo.setAttribute("width", w); a.rotuloFondo.setAttribute("height", 20);
+      a.rotuloTexto.setAttribute("x", mx); a.rotuloTexto.setAttribute("y", my);
+    }
+  }
+  for (const n of nodos) n.grupo.setAttribute("transform", `translate(${n.px},${n.py})`);
+}
+
+let animacion = null, energia = 0;
+function animar(valor = 1) {
+  energia = Math.max(energia, valor);
+  if (animacion) return;
+  const bucle = () => {
+    paso(1);
+    dibujar();
+    energia *= 0.94;
+    if (arrastrado || energia > 0.02) animacion = requestAnimationFrame(bucle);
+    else animacion = null;
+  };
+  animacion = requestAnimationFrame(bucle);
+}
+
+let arrastrado = null;
+function puntero(e) {
+  const r = svg.getBoundingClientRect();
+  return [(e.clientX - r.left) * ancho / r.width, (e.clientY - r.top) * ALTO / r.height];
+}
+function iniciarArrastre(e, n) {
+  arrastrado = n; n.fijo = true;
+  n.grupo.classList.add("arrastrando");
+  n.grupo.setPointerCapture(e.pointerId);
+  ocultarInfo(); resaltar(n);
+  animar();
+}
+svg.addEventListener("pointermove", e => {
+  if (!arrastrado) return;
+  [arrastrado.px, arrastrado.py] = puntero(e);
+  limitar(arrastrado);
+  animar();
+});
+const soltar = () => {
+  if (!arrastrado) return;
+  arrastrado.ancla = aDato(arrastrado.px, arrastrado.py);
+  arrastrado.fijo = false;
+  arrastrado.grupo.classList.remove("arrastrando");
+  resaltar(null);
+  arrastrado = null;
+  animar(1);
+};
+svg.addEventListener("pointerup", soltar);
+svg.addEventListener("pointercancel", soltar);
+
+function resaltar(n) {
+  for (const a of aristas) {
+    const fuera = n && a.a !== n && a.b !== n;
+    a.linea.classList.toggle("atenuado", !!fuera);
+    if (a.rotulo) a.rotulo.classList.toggle("atenuado", !!fuera);
+  }
+  for (const m of nodos) {
+    const vecino = !n || m === n || aristas.some(a => (a.a === n && a.b === m) || (a.b === n && a.a === m));
+    m.grupo.classList.toggle("atenuado", !vecino);
+  }
+}
+
+function textoNodo(n) {
+  const propias = aristas.filter(a => a.a === n || a.b === n);
+  const total = propias.reduce((s, a) => s + a.flujo, 0);
+  const tipo = n.tipo === "planta" ? "Planta (destino)" : "Empresa (fuente)";
+  const cantidad = n.tipo === "planta" ? `Capacidad Dⱼ: ${fmt(n.cantidad, 2)} t/sem` : `Oferta Oᵢ: ${fmt(n.cantidad, 2)} t/sem`;
+  const flujo = DATOS.verFlujos ? `<br>${n.tipo === "planta" ? "Recibe" : "Envía"}: ${fmt(total, 2)} t` : "";
+  return `<strong>${n.id} · ${n.municipio}</strong><br>${tipo}<br>${cantidad}<br>${propias.length} rutas${flujo}`;
+}
+function textoArista(a) {
+  const flujo = DATOS.verFlujos ? `<br>Flujo xᵢⱼ: ${fmt(a.flujo, 2)} t` : "";
+  return `<strong>${a.u} → ${a.v}</strong><br>Distancia: ${fmt(a.distancia, 1)} km` +
+         `<br>Costo cᵢⱼ: $${fmt(a.costo)} /t${flujo}`;
+}
+function mostrarInfo(e, html, arista) {
+  if (arrastrado) return;
+  info.innerHTML = html; info.style.display = "block"; moverInfo(e);
+  if (arista) arista.linea.setAttribute("stroke-opacity", 1);
+}
+function moverInfo(e) {
+  const r = document.getElementById("lienzo").getBoundingClientRect();
+  let x = e.clientX - r.left + 14, y = e.clientY - r.top + 14;
+  if (x + info.offsetWidth > r.width - 8) x -= info.offsetWidth + 28;
+  if (y + info.offsetHeight > r.height - 8) y -= info.offsetHeight + 28;
+  info.style.left = `${x}px`; info.style.top = `${y}px`;
+}
+function ocultarInfo() {
+  info.style.display = "none";
+  for (const a of aristas) a.linea.setAttribute("stroke-opacity", conFlujo(a) ? 0.95 : (DATOS.verFlujos ? 0.25 : 0.5));
+}
+
+function leyenda() {
+  const muestra = (contenido) => `<svg class="muestra" width="26" height="16" viewBox="0 0 26 16">${contenido}</svg>`;
+  const elementos = [
+    [muestra(`<circle cx="13" cy="8" r="6" fill="${P.sf}" stroke="${P.ac}" stroke-width="2"/>`), "Fuente (empresa)"],
+    [muestra(`<circle cx="13" cy="8" r="7" fill="${P.ac}"/>`), "Destino (planta)"],
+    [muestra(`<line x1="1" y1="8" x2="25" y2="8" stroke="${P.mu}" stroke-opacity=".6" stroke-width="1.5"/>`), "Ruta disponible"],
+  ];
+  if (DATOS.verFlujos) elementos.push([muestra(`<line x1="2" y1="8" x2="24" y2="8" stroke="${P.ac}" stroke-width="2" stroke-linecap="round"/>`), "Flujo óptimo"]);
+  const contenedor = document.getElementById("leyenda");
+  contenedor.innerHTML = elementos.map(([m, t]) => `<span>${m}${t}</span>`).join("") +
+    `<button id="restablecer" type="button" title="Arrastra los nodos para reorganizar la red; ` +
+    `este botón los devuelve a su ubicación geográfica">Restablecer ubicación</button>`;
+  document.getElementById("restablecer").addEventListener("click", () => {
+    for (const n of nodos) n.ancla = { ...n.geo };
+    animar(1);
+  });
+}
+
+medir();
+construir();
+for (let i = 0; i < 400; i++) paso(1);
+dibujar();
+leyenda();
+new ResizeObserver(() => {
+  const anterior = ancho;
+  medir();
+  if (Math.abs(anterior - ancho) < 1) return;
+  dibujarReferencias();
+  for (let i = 0; i < 60; i++) paso(1);
+  dibujar();
+}).observe(document.getElementById("lienzo"));
+</script>
+</body>
+</html>

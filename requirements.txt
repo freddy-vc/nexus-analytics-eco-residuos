@@ -1,5 +1,5 @@
 # Interfaz web
-streamlit>=1.36
+streamlit>=1.50
 
 # Cálculo y grafos (la optimización se implementa desde cero sobre NumPy)
 numpy>=1.26
