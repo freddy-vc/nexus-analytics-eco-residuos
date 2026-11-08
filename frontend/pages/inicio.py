@@ -1,6 +1,8 @@
 import streamlit as st
 
 from backend.network.balance import TipoBalance, verificar_balance
+from backend.comparison.metrics import gap
+from backend.services.genetic_service import ServicioGenetico
 from backend.services.optimization_service import ServicioOptimizacion
 from frontend.components import charts, data_tables, header, icons, session, theme_toggle
 from frontend.components import formatters as fmt
@@ -14,6 +16,7 @@ header.mostrar("General", "Inicio")
 escenario = session.cargar_escenario()
 servicio = ServicioOptimizacion()
 ejecucion = servicio.ultima_exacta(escenario)
+lote = ServicioGenetico().ultimo_lote(escenario)
 m, n = len(escenario.empresas), len(escenario.plantas)
 
 with st.container(key="tarjeta_portada"):
@@ -35,13 +38,19 @@ if ejecucion and ejecucion.es_optima:
     valor_costo, nota_costo = fmt.moneda(ejecucion.costo_total), "Compra, transporte y operación por semana"
 else:
     valor_costo, nota_costo = "—", "Resuelve el método exacto"
+diferencia = gap(lote.estadisticas.mejor, ejecucion.costo_total) if lote and ejecucion and ejecucion.es_optima else None
+if diferencia is not None:
+    valor_gap = fmt.porcentaje(diferencia, 2)
+    nota_gap = f"Mejor de {lote.estadisticas.corridas} {'corrida' if lote.estadisticas.corridas == 1 else 'corridas'}"
+else:
+    valor_gap, nota_gap = "—", "Ejecuta el método exacto y el algoritmo genético"
 st.html(rejilla_indicadores([
     indicador_icono("Oferta total", f"{fmt.cantidad(escenario.oferta.sum())} t/sem",
                     f"{m} empresas aliadas", "toneladas"),
     indicador_icono("Demanda de plantas", f"{fmt.cantidad(escenario.demanda.sum())} t/sem",
                     f"{sum(p.activa for p in escenario.plantas)} plantas activas", "plantas"),
     indicador_icono("Costo total óptimo", valor_costo, nota_costo, "dinero"),
-    indicador_icono("Gap AG vs. exacto", "—", "Sin corridas del algoritmo genético", "brecha"),
+    indicador_icono("Gap AG vs. exacto", valor_gap, nota_gap, "brecha"),
 ]))
 
 balance = verificar_balance(escenario.oferta, escenario.demanda)
@@ -76,8 +85,9 @@ with izquierda:
 with derecha.container(key="tarjeta_ejecuciones"):
     with st.container(horizontal=True, vertical_alignment="center"):
         st.html('<h3 class="tarjeta-titulo">Últimas ejecuciones</h3>')
-        st.html('<span class="enlace-bloqueado" aria-disabled="true" '
-                'title="Disponible en una fase posterior del proyecto">Ver comparación</span>')
+        st.html('<div class="espaciador"></div>')
+        with st.container(key="enlace_texto_comparar"):
+            st.page_link("pages/comparacion.py", label="Ver comparación")
     recientes = servicio.ejecuciones_recientes(4)
     if recientes:
         filas_tabla = []

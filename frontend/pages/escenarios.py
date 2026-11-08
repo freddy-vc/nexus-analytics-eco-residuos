@@ -79,8 +79,10 @@ with st.container(horizontal=True, vertical_alignment="center"):
                                  label_visibility="collapsed", key="buscar_escenario")
     st.html('<div class="espaciador"></div>')
     with st.container(key="barra_comparar"):
-        st.button(f"Comparar seleccionados ({len(seleccionados)})", disabled=True,
-                  help="La comparación estará disponible en una fase posterior del proyecto.")
+        if st.button(f"Comparar seleccionados ({len(seleccionados)})", disabled=len(seleccionados) < 2,
+                     help="Marca al menos dos escenarios para compararlos."):
+            st.session_state.comparar_escenarios = seleccionados
+            st.switch_page("pages/comparacion.py")
     with st.container(key="barra_nuevo_escenario"):
         if st.button("+ Nuevo escenario", type="primary"):
             dialogo_nuevo()

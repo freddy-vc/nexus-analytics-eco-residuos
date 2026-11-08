@@ -41,12 +41,13 @@ SECCIONES = {
     "Optimización": [
         EntradaMenu("red", "Red logística", pagina("red_logistica", "Red logística", "red-logistica")),
         EntradaMenu("exacto", "Método exacto", pagina("metodo_exacto", "Método exacto", "metodo-exacto")),
-        EntradaMenu("genetico", "Algoritmo genético"),
+        EntradaMenu("genetico", "Algoritmo genético",
+                    pagina("algoritmo_genetico", "Algoritmo genético", "algoritmo-genetico")),
     ],
     "Análisis": [
-        EntradaMenu("sensibilidad", "Sensibilidad"),
+        EntradaMenu("sensibilidad", "Sensibilidad", pagina("sensibilidad", "Sensibilidad", "sensibilidad")),
         EntradaMenu("escenarios", "Escenarios", pagina("escenarios", "Escenarios", "escenarios")),
-        EntradaMenu("comparacion", "Comparación"),
+        EntradaMenu("comparacion", "Comparación", pagina("comparacion", "Comparación", "comparacion")),
     ],
 }
 PAGINAS = [e.pagina for entradas in SECCIONES.values() for e in entradas if not e.bloqueada]

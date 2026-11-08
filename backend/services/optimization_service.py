@@ -7,12 +7,13 @@ from sqlalchemy.orm import selectinload
 
 from backend.config import Configuracion
 from backend.database import (BaseDatos, Ejecucion, EstadoEjecucion, MetodoSolucion,
-                              ResultadoRuta)
+                              ResultadoRuta, SensibilidadDemanda, SensibilidadOferta)
 from backend.exact.simplex import EstadoSolucion
 from backend.exact.solution_validator import ReporteFactibilidad, validar_solucion
 from backend.exact.transport_model import ModeloTransporte
 from backend.network.balance import EstadoBalance, TipoBalance, verificar_balance
 from backend.network.cost_matrix import DesgloseCosto, desglose_costo
+from backend.sensitivity.analysis import AnalisisSensibilidad, analizar
 from backend.services.scenario_service import DatosEscenario
 from backend.utils.exceptions import ErrorValidacion
 from backend.utils.singleton import MetaSingleton
@@ -92,15 +93,36 @@ class ServicioOptimizacion(metaclass=MetaSingleton):
             sesion.add(ejecucion)
             sesion.flush()
             if solucion.flujos is not None:
-                mascara = escenario.habilitadas
-                sesion.add_all(
-                    ResultadoRuta(ejecucion_id=ejecucion.id, ruta_id=int(ruta_id),
-                                  toneladas=round(float(toneladas), 2))
-                    for ruta_id, toneladas in zip(escenario.ids_rutas[mascara],
-                                                  solucion.flujos[mascara]))
+                self._guardar_resultados(sesion, ejecucion.id, escenario, solucion.flujos,
+                                         analizar(escenario.problema()))
             ejecucion_id = ejecucion.id
 
         return self.ultima_exacta(escenario, ejecucion_id)
+
+    @staticmethod
+    def _guardar_resultados(sesion, ejecucion_id: int, escenario: DatosEscenario, flujos: np.ndarray,
+                            analisis: AnalisisSensibilidad | None) -> None:
+        """Flujos por ruta y, si hay análisis, costos reducidos, rangos y precios sombra."""
+        mascara = escenario.habilitadas
+        rutas = analisis.rutas if analisis else [None] * int(mascara.sum())
+        sesion.add_all(
+            ResultadoRuta(ejecucion_id=ejecucion_id, ruta_id=int(ruta_id), toneladas=round(float(toneladas), 2),
+                          costo_reducido=_decimal(r.costo_reducido) if r else None,
+                          costo_min_optimalidad=_decimal(r.costo_minimo) if r else None,
+                          costo_max_optimalidad=_decimal(r.costo_maximo) if r else None)
+            for ruta_id, toneladas, r in zip(escenario.ids_rutas[mascara], flujos[mascara], rutas))
+        if analisis is None:
+            return
+        sesion.add_all(
+            SensibilidadOferta(ejecucion_id=ejecucion_id, escenario_empresa_id=empresa.id_vinculo,
+                               precio_sombra=round(nodo.precio_sombra, 2), holgura=round(nodo.holgura, 2),
+                               oferta_min=_decimal(nodo.minimo), oferta_max=_decimal(nodo.maximo))
+            for empresa, nodo in zip(escenario.empresas, analisis.empresas))
+        sesion.add_all(
+            SensibilidadDemanda(ejecucion_id=ejecucion_id, escenario_planta_id=planta.id_vinculo,
+                                precio_sombra=round(nodo.precio_sombra, 2), holgura=round(nodo.holgura, 2),
+                                demanda_min=_decimal(nodo.minimo), demanda_max=_decimal(nodo.maximo))
+            for planta, nodo in zip(escenario.plantas, analisis.plantas))
 
     def ultima_exacta(self, escenario: DatosEscenario,
                       ejecucion_id: int | None = None) -> EjecucionExacta | None:
@@ -119,13 +141,22 @@ class ServicioOptimizacion(metaclass=MetaSingleton):
             return self._a_ejecucion(ejecucion, escenario)
 
     def ejecuciones_recientes(self, limite: int = 4) -> list[ResumenEjecucion]:
+        """Últimas ejecuciones; las corridas de un mismo lote del AG se muestran como una sola (la mejor)."""
         with self._bd.sesion() as sesion:
-            filas = sesion.scalars(
+            candidatas = sesion.scalars(
                 select(Ejecucion)
                 .options(selectinload(Ejecucion.metodo), selectinload(Ejecucion.estado),
                          selectinload(Ejecucion.escenario))
                 .order_by(Ejecucion.iniciada_en.desc(), Ejecucion.id.desc())
-                .limit(limite)).all()
+                .limit(limite * 60)).all()
+            lotes: dict[tuple, Ejecucion] = {}
+            for e in candidatas:
+                clave = (e.escenario_id, e.metodo_solucion_id, e.iniciada_en) \
+                    if e.metodo.nombre != METODO_EXACTO else ("exacta", e.id)
+                actual = lotes.get(clave)
+                if actual is None or _mejor_que(e, actual):
+                    lotes[clave] = e
+            filas = sorted(lotes.values(), key=lambda e: (e.iniciada_en, e.id), reverse=True)[:limite]
             return [ResumenEjecucion(
                 metodo=self._etiqueta(e.metodo.nombre, e.escenario),
                 escenario=e.escenario.nombre, estado=e.estado.nombre,
@@ -179,3 +210,17 @@ class ServicioOptimizacion(metaclass=MetaSingleton):
         if id_catalogo is None:
             raise ErrorValidacion(f"Falta el valor «{nombre}» en el catálogo {modelo.__tablename__}.")
         return id_catalogo
+
+
+def _decimal(valor: float) -> float | None:
+    """Los rangos infinitos se guardan como NULL (sin límite)."""
+    return round(float(valor), 2) if np.isfinite(valor) else None
+
+
+def _mejor_que(a: Ejecucion, b: Ejecucion) -> bool:
+    factible_a, factible_b = a.estado.nombre in ("OPTIMO", "FACTIBLE"), b.estado.nombre in ("OPTIMO", "FACTIBLE")
+    if factible_a != factible_b:
+        return factible_a
+    costo_a = float(a.costo_objetivo_cop) if a.costo_objetivo_cop is not None else float("inf")
+    costo_b = float(b.costo_objetivo_cop) if b.costo_objetivo_cop is not None else float("inf")
+    return costo_a < costo_b

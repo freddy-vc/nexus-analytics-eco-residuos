@@ -565,3 +565,50 @@ div[role="dialog"] h2, div[role="dialog"] h2 span { color: var(--tx); font-size:
 .stApp input:autofill { background-color: var(--sf2) !important; color: var(--tx) !important; }
 [data-testid="InputInstructions"] { color: var(--mu) !important; background: transparent !important; }
 .th-unidad { display: block; font-size: 11px; font-weight: 500; color: var(--mu); opacity: .85; margin-top: 2px; }
+
+/* ---------- Algoritmo genético ---------- */
+.ag-estado { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--mu); }
+.ag-estado span:first-child { color: var(--tx); font-weight: 600; }
+.st-key-tarjeta_parametros_ag { gap: 12px; }
+.st-key-tarjeta_convergencia { gap: 8px; }
+.st-key-tarjeta_convergencia [data-testid="stPlotlyChart"], .st-key-tarjeta_resultado_simulacion [data-testid="stPlotlyChart"] { margin: 0 -4px; }
+.diseno-ag { display: flex; flex-direction: column; gap: 10px; height: 100%; }
+.diseno-ag p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--mu); }
+.diseno-ag strong { color: var(--tx); }
+[class*="st-key-tarjeta_parametros_ag"] [data-testid="stSlider"] [data-testid="stThumbValue"],
+[class*="st-key-tarjeta_parametros_ag"] [data-testid="stSlider"] div[role="slider"] + div { color: var(--tx); }
+.stApp [data-testid="stSlider"] [role="slider"] { background: var(--ac) !important; border-color: var(--ac) !important; box-shadow: none !important; }
+.stApp [data-testid="stProgress"] [role="progressbar"] > div > div > div { background: var(--ac) !important; }
+.stApp [data-testid="stProgress"] p { color: var(--mu) !important; font-size: 13px; }
+.stApp [data-testid="stCheckbox"] label p { font-size: 14px; }
+
+/* ---------- Sensibilidad ---------- */
+.sens-intro { display: flex; flex-direction: column; gap: 18px; }
+.sens-intro-texto p { margin: 8px 0 0; font-size: 14px; line-height: 1.6; color: var(--mu); max-width: 980px; }
+.sens-intro-texto p strong { color: var(--tx); }
+.conceptos { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.concepto { display: flex; gap: 12px; align-items: flex-start; background: var(--sf2); border-radius: 12px; padding: 14px; }
+.concepto .mosaico-icono { width: 40px; height: 40px; flex: none; border-radius: 10px; }
+.concepto > div { display: flex; flex-direction: column; gap: 3px; }
+.concepto-nombre { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--act); }
+.concepto strong { font-size: 14px; color: var(--tx); }
+.concepto p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--mu); }
+.sens-tarjeta { display: flex; flex-direction: column; gap: 14px; }
+.sube { color: var(--wa); font-weight: 600; }
+.baja { color: var(--act); font-weight: 600; }
+.conclusiones { background: var(--acs); border-radius: 12px; padding: 14px 16px; }
+.conclusiones-titulo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; color: var(--act); }
+.conclusiones ul { margin: 8px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.conclusiones li { font-size: 14px; line-height: 1.5; color: var(--tx); }
+.nota.ag-nota { color: var(--ag); background: var(--ags); }
+.st-key-tarjeta_simulacion, .st-key-tarjeta_resultado_simulacion { gap: 12px; }
+
+/* ---------- Comparación ---------- */
+.comp-tarjeta { display: flex; flex-direction: column; gap: 10px; height: 100%; }
+.comp-costo { font-size: 28px; letter-spacing: -.01em; color: var(--tx); }
+.comp-gap { align-items: center; justify-content: center; text-align: center; }
+.comp-gap > span { font-size: 13px; color: var(--mu); }
+.comp-gap strong { font-size: 44px; color: var(--act); letter-spacing: -.02em; line-height: 1.1; }
+.comp-gap p { margin: 0; font-size: 13px; line-height: 1.5; }
+.st-key-tarjeta_comparacion_escenarios, .st-key-tarjeta_escalabilidad, .st-key-tarjeta_exportar { gap: 12px; }
+.st-key-tarjeta_exportar [data-testid="stCheckbox"] { margin-bottom: -6px; }

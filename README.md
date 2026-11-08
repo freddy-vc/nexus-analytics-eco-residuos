@@ -190,6 +190,7 @@ nexus-analytics-eco-residuos/
 │   │   ├── __init__.py
 │   │   ├── duals.py                 # Precios sombra y costos reducidos
 │   │   ├── ranging.py               # Rangos de optimalidad y de factibilidad
+│   │   ├── analysis.py              # Resumen por empresa, planta y ruta
 │   │   └── scenario_simulator.py    # Simulación de variaciones porcentuales
 │   ├── comparison/                  # Fase 4 · Comparación exacto vs. AG
 │   │   ├── __init__.py
@@ -204,9 +205,10 @@ nexus-analytics-eco-residuos/
 │   │   ├── __init__.py
 │   │   ├── network_service.py       # Empresas, plantas, rutas y catálogos
 │   │   ├── scenario_service.py      # Crear, copiar, guardar y recuperar escenarios
-│   │   ├── optimization_service.py  # Ejecución del método exacto y del AG
-│   │   ├── sensitivity_service.py   # Análisis de sensibilidad y simulaciones
-│   │   └── comparison_service.py    # Comparaciones y reportes
+│   │   ├── optimization_service.py  # Método exacto, sus resultados y su sensibilidad
+│   │   ├── genetic_service.py       # Corridas del AG (lotes), parámetros e historial
+│   │   ├── sensitivity_service.py   # Análisis de sensibilidad, simulaciones y escenarios derivados
+│   │   └── comparison_service.py    # Exacto vs. AG por escenario y registro de comparaciones
 │   └── utils/
 │       ├── __init__.py
 │       ├── singleton.py             # Metaclase SingletonMeta
@@ -270,8 +272,8 @@ nexus-analytics-eco-residuos/
 | `auth.py` | Valida usuario y contraseña contra `usuario.password_hash` (bcrypt). Solo login básico: sin registro ni recuperación de contraseña. | — |
 | `network/` | Construye el grafo bipartito dirigido con NetworkX, calcula la matriz c<sub>ij</sub> y valida el balance; si ΣO<sub>i</sub> ≠ ΣD<sub>j</sub> agrega la empresa o planta ficticia. | 1 |
 | `exact/` | Traduce la red a un modelo de PL en forma matricial y lo resuelve con un **Simplex de dos fases** sobre NumPy; entrega el estado (óptimo, infactible, no acotado), x<sub>ij</sub>, Z, el tiempo y la base óptima. `solution_validator.py` comprueba oferta, demanda y no negatividad. | 2 |
-| `genetic/` | AG con cromosoma de asignación de flujos, aptitud = 1 / (costo + penalización por violación de capacidad), selección por ruleta o torneo, cruce de uno o dos puntos, mutación, semilla reproducible y múltiples corridas. | 3 |
-| `sensitivity/` | A partir de la tabla final del Simplex calcula precios sombra, costos reducidos y rangos de variación de c<sub>ij</sub>, O<sub>i</sub> y D<sub>j</sub> que no alteran la base óptima; simula escenarios porcentuales. | 4 |
+| `genetic/` | AG con cromosoma de asignación de flujos, aptitud = 1 / (costo + penalización por violación de capacidad), selección por ruleta o torneo, cruce de uno o dos puntos, mutación, semilla reproducible y múltiples corridas (ver 9.1). | 3 |
+| `sensitivity/` | A partir de la base óptima del Simplex calcula precios sombra, holguras, costos reducidos y rangos de factibilidad (O<sub>i</sub>, D<sub>j</sub>) y de optimalidad (c<sub>ij</sub>) que no alteran la base; simula escenarios porcentuales (ver 9.2). | 4 |
 | `comparison/` | Calcula costo, tiempo y gap % = (Z<sub>AG</sub> − Z<sub>exacto</sub>) / Z<sub>exacto</sub> × 100 y arma el reporte comparativo. | 4 |
 | `data_io/` | Importa y exporta los datos de entrada (CSV, XLSX, JSON) y los reportes (PDF, CSV, XLSX) en UTF-8. | 4 |
 | `services/` | Casos de uso que combinan algoritmos y persistencia: crear escenarios, ejecutar métodos, guardar resultados y comparar. | — |
@@ -281,16 +283,16 @@ nexus-analytics-eco-residuos/
 
 | Página | Contenido | HU |
 |---|---|---|
-| Inicio | KPIs del escenario activo: costo total, toneladas, gap | — |
+| Inicio | KPIs del escenario activo: costo total, toneladas y gap del AG; últimas ejecuciones | — |
 | Empresas / Plantas | CRUD de orígenes y destinos | HU-01 |
 | Rutas y costos | Matriz de distancias y de costos unitarios | HU-02 |
 | Parámetros | Costo de transporte, factor, ofertas, precios por tonelada, demandas y balance | HU-02, HU-03 |
 | Red logística | Grafo interactivo de la red | HU-05 |
 | Escenarios | Buscar, abrir, duplicar y crear escenarios derivados | HU-04, HU-10 |
 | Método exacto | Ejecución del Simplex y resultados | HU-06, HU-08 |
-| Algoritmo genético | Parámetros, ejecución, convergencia y estadísticas | HU-07, HU-08 |
-| Sensibilidad | Precios sombra, rangos y simulación de escenarios | HU-09, HU-10 |
-| Comparación | Reporte exacto vs. AG exportable | HU-11 |
+| Algoritmo genético | Parámetros, una o N corridas con progreso en vivo, curva de convergencia, estadísticas y diseño del algoritmo | HU-07, HU-08 |
+| Sensibilidad | Explicación de cada concepto, precios sombra y rangos por planta, empresa y ruta con conclusiones en lenguaje sencillo, simulación de escenarios (exacto y AG) y guardado como escenarios | HU-09, HU-10 |
+| Comparación | Exacto vs. AG: costo, tiempo, gap, comportamiento por escenario, escalabilidad y reporte PDF | HU-11 |
 
 ## 9. Modelo matemático
 
@@ -320,6 +322,34 @@ Como $c_{ij}$ ya incluye la compra, $Z$ es el costo total semanal (compra, trans
 Si el problema no está balanceado se agrega una empresa ficticia $E_{m+1}$ o una planta ficticia $P_{n+1}$ con costo cero. El desarrollo completo está en `docs/Fase1_Modelado_Red_Logistica.docx`.
 
 > La interfaz está pensada para un usuario final: muestra los datos con nombres y unidades (t/semana, COP/t, COP/t·km, km), sin símbolos ni fórmulas.
+
+### 9.1 Algoritmo genético
+
+| Elemento | Diseño |
+|---|---|
+| Cromosoma | Matriz empresas × plantas con las toneladas de cada ruta. Cada fila suma la oferta de su empresa, así la oferta se cumple siempre. Trabaja sobre el problema balanceado (con nodo ficticio si hace falta), igual que el método exacto. |
+| Aptitud | $f = 1 / (Z + \lambda \cdot \text{toneladas sobre la capacidad})$, con $\lambda$ configurable (1.000.000 COP/t por defecto). |
+| Población inicial | Planes al azar más un 20 % construidos por el método del costo mínimo con ruido. |
+| Selección | Torneo (k configurable) o ruleta (probabilidad proporcional a la aptitud por encima de la peor). |
+| Cruce | De uno o dos puntos entre empresas: cada hijo hereda el plan completo de cada empresa de uno de sus padres. |
+| Mutación | Por empresa, con probabilidad igual a la tasa de mutación: transfiere toneladas a una planta con capacidad libre o hace un intercambio en ciclo con otra empresa (conserva oferta y capacidad), favoreciendo los cambios que abaratan. |
+| Elitismo y cierre | Los mejores individuos pasan intactos; al final se reparan residuos de capacidad menores que quedan de las transferencias parciales. |
+| Corridas | N corridas con semillas consecutivas (reproducibles); se guardan todas en la misma transacción (mismo `iniciada_en`), lo que identifica el lote. |
+
+Con los parámetros por defecto (población 100, 300 generaciones, cruce 0,85, mutación 0,05, torneo de 3, cruce de dos puntos, elitismo 2) el AG alcanza el óptimo exacto del caso base y de los escenarios desbalanceados de la Fase 1 en menos de 1 s por corrida.
+
+### 9.2 Análisis de sensibilidad
+
+Se parte de la base óptima del Simplex sobre la formulación de la Fase 1 sin nodos ficticios (oferta "=" y demanda "≤"; si sobra residuo, oferta "≤" y demanda "="). Con $B^{-1}$:
+
+| Resultado | Cálculo | Lectura para el usuario |
+|---|---|---|
+| Precio sombra | $y = c_B B^{-1}$ | Cuánto cambia el costo semanal con 1 t más de capacidad (planta) o de oferta (empresa) |
+| Rango de factibilidad | $x_B + \Delta\, B^{-1} e_k \ge 0$ | Entre qué valores puede moverse esa cantidad sin cambiar las rutas usadas |
+| Costo reducido | $d = c - y\,A$ | Cuánto debería bajar el costo de una ruta sin uso para que convenga |
+| Rango de optimalidad | razón entre costos reducidos y la fila de $B^{-1}A$ de la ruta | Entre qué costos por tonelada el plan sigue siendo el mejor |
+
+Los precios sombra se verificaron re-resolviendo el modelo con ±1 t en cada empresa y planta, y los rangos de optimalidad re-resolviendo en sus extremos. Cuando la solución es degenerada (empresas o rutas con costos idénticos) la página lo advierte, porque los duales pueden no ser únicos. La simulación varía un parámetro entre un mínimo y un máximo porcentual, resuelve exacto y AG en cada punto e indica dónde cambia el plan de envíos; los puntos pueden guardarse como escenarios derivados (`analisis_sensibilidad`, `punto_sensibilidad`).
 
 ## 10. Base de datos
 
@@ -458,8 +488,9 @@ La aplicación se abre en `http://localhost:8501`. Para detenerla pulse **Ctrl +
 3. Visualizar la red logística y validar el balance.
 4. Resolver con el **método exacto**.
 5. Crear escenarios derivados en **Escenarios** (duplicar o «+ Nuevo escenario»), ajustar sus parámetros y resolverlos.
-6. Configurar y ejecutar el **Algoritmo Genético** (fase 3).
-7. Realizar el **análisis de sensibilidad** y generar el **reporte comparativo** (fase 4).
+6. Configurar y ejecutar el **Algoritmo Genético** (una o varias corridas) y revisar la curva de convergencia.
+7. Revisar el **análisis de sensibilidad**: precios sombra y rangos por planta, empresa y ruta; simular escenarios y guardarlos.
+8. Comparar ambos métodos en **Comparación** y descargar el reporte en PDF.
 
 ## 13. Requerimientos no funcionales clave
 
@@ -481,18 +512,18 @@ La aplicación se abre en `http://localhost:8501`. Para detenerla pulse **Ctrl +
 - [x] Modelo entidad-relación (3FN) y script de base de datos.
 - [x] Estructura del proyecto.
 - [x] **Fase 2 · Solución exacta:** Simplex de dos fases con el costo de compra incluido, validación de factibilidad, interfaz de datos y resultados, y página de Escenarios.
-- [ ] **Fase 3 · Metaheurística:** Algoritmo Genético y múltiples corridas.
-- [ ] **Fase 4 · Interfaz, sensibilidad y comparación:** páginas de Streamlit, precios sombra, rangos, escenarios y reporte comparativo.
+- [x] **Fase 3 · Metaheurística:** Algoritmo Genético con selección por torneo o ruleta, cruce de uno o dos puntos, mutación, elitismo y múltiples corridas reproducibles.
+- [x] **Fase 4 · Interfaz, sensibilidad y comparación:** precios sombra, rangos de factibilidad y optimalidad, simulación de escenarios, comparación exacto vs. AG, escalabilidad y reporte PDF.
 - [ ] Informe técnico en formato IEEE y sustentación.
 
 ## 15. Equipo y roles
 
 | Rol | Responsabilidades | Integrante |
 |---|---|---|
-| Líder de proyecto / Analista de negocio | Coordinación, cronograma, informe IEEE y validación de restricciones del negocio | Angie Yessenia Gutierrez Guerrero|
-| Ingeniero de modelado y optimización | Formulación matemática y módulo exacto (`network/`, `exact/`) | Cristian Fernando Muñoz Martinez |
-| Desarrollador de metaheurísticas | Diseño y ajuste del Algoritmo Genético (`genetic/`) | Freddy Leonardo Vega Cisneros |
-| Desarrollador de software e interfaz | Arquitectura, interfaz y módulos de sensibilidad y reportes (`frontend/`, `sensitivity/`, `comparison/`) | Juan Nicolas Cabrera Miranda |
+| Líder de proyecto / Analista de negocio | Coordinación, cronograma, informe IEEE y validación de restricciones del negocio | *Por definir* |
+| Ingeniero de modelado y optimización | Formulación matemática y módulo exacto (`network/`, `exact/`) | *Por definir* |
+| Desarrollador de metaheurísticas | Diseño y ajuste del Algoritmo Genético (`genetic/`) | *Por definir* |
+| Desarrollador de software e interfaz | Arquitectura, interfaz y módulos de sensibilidad y reportes (`frontend/`, `sensitivity/`, `comparison/`) | *Por definir* |
 
 ## 16. Flujo de trabajo con Git
 

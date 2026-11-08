@@ -47,3 +47,62 @@ def red_portada(paleta: dict[str, str]) -> str:
     datos = base64.b64encode(marcado.encode()).decode()
     return (f'<img src="data:image/svg+xml;base64,{datos}" width="100%" style="max-width:380px" '
             f'alt="Esquema de la red: empresas conectadas a plantas">')
+
+
+def _figura_base(paleta: dict[str, str], alto: int, titulo_x: str, titulo_y: str):
+    import plotly.graph_objects as go
+
+    figura = go.Figure()
+    figura.update_layout(
+        height=alto, margin=dict(l=8, r=8, t=8, b=8), paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)", font=dict(family="Inter, system-ui, sans-serif", color=paleta["mu"], size=12),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor="rgba(0,0,0,0)"),
+        hoverlabel=dict(bgcolor=paleta["sf"], bordercolor=paleta["bd"], font_color=paleta["tx"]),
+        separators=",.")
+    eje = dict(gridcolor=paleta["bd"], zeroline=False, linecolor=paleta["bd"], tickfont=dict(color=paleta["mu"]))
+    figura.update_xaxes(title_text=titulo_x, **eje)
+    figura.update_yaxes(title_text=titulo_y, tickprefix="$", tickformat=",.3s", **eje)
+    return figura
+
+
+def figura_convergencia(generaciones: list[int], mejor: list[float], promedio: list[float],
+                        optimo: float | None, paleta: dict[str, str]):
+    """Evolución del mejor costo y del costo promedio de la población por generación."""
+    import plotly.graph_objects as go
+
+    figura = _figura_base(paleta, 300, "Generación", "Costo semanal (COP)")
+    figura.add_trace(go.Scatter(x=generaciones, y=promedio, name="Costo promedio", mode="lines",
+                                line=dict(color=paleta["mu"], width=1.5, dash="dot"),
+                                hovertemplate="Generación %{x}<br>Promedio $%{y:,.0f}<extra></extra>"))
+    figura.add_trace(go.Scatter(x=generaciones, y=mejor, name="Mejor costo", mode="lines",
+                                line=dict(color=paleta["ac"], width=3),
+                                hovertemplate="Generación %{x}<br>Mejor $%{y:,.0f}<extra></extra>"))
+    if optimo is not None:
+        figura.add_hline(y=optimo, line=dict(color=paleta["ag"], width=1.5, dash="dash"))
+        figura.add_trace(go.Scatter(x=[None], y=[None], name="Óptimo exacto", mode="lines",
+                                    line=dict(color=paleta["ag"], width=1.5, dash="dash")))
+        valores = [v for v in mejor if v is not None] + [optimo]
+        rango = max(min(promedio[: max(len(promedio) // 10, 1)] + [max(valores)]), optimo * 1.002)
+        figura.update_yaxes(range=[optimo - (rango - optimo) * 0.08, rango])
+    return figura
+
+
+def figura_simulacion(etiquetas: list[str], exacto: list[float | None], genetico: list[float | None] | None,
+                      cambia_plan: list[bool], paleta: dict[str, str]):
+    """Costo óptimo en cada punto de la simulación; los puntos donde cambia el plan se resaltan."""
+    import plotly.graph_objects as go
+
+    figura = _figura_base(paleta, 320, "Variación del parámetro", "Costo semanal (COP)")
+    colores = [paleta["wa"] if cambio else paleta["ac"] for cambio in cambia_plan]
+    figura.add_trace(go.Bar(x=etiquetas, y=exacto, name="Método exacto", marker_color=colores,
+                            hovertemplate="%{x}<br>Exacto $%{y:,.0f}<extra></extra>"))
+    if genetico is not None:
+        figura.add_trace(go.Scatter(x=etiquetas, y=genetico, name="Algoritmo genético", mode="lines+markers",
+                                    line=dict(color=paleta["ag"], width=2), marker=dict(size=8),
+                                    hovertemplate="%{x}<br>Genético $%{y:,.0f}<extra></extra>"))
+    validos = [v for v in exacto + (genetico or []) if v is not None]
+    if validos:
+        minimo, maximo = min(validos), max(validos)
+        margen = max((maximo - minimo) * 0.15, maximo * 0.02)
+        figura.update_yaxes(range=[max(minimo - margen, 0), maximo + margen])
+    return figura

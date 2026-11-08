@@ -33,7 +33,8 @@ def mostrar(secciones: dict[str, list[EntradaMenu]], actual: st.Page) -> None:
     Los módulos de fases posteriores aparecen en gris y no navegan.
     """
     with st.sidebar:
-        st.html(f'<div class="marca"><img src="{uri_logo()}" alt="EcoResiduos">')
+        st.html(f'<div class="marca"><img src="{uri_logo()}" alt="EcoResiduos">'
+                f'<span>Optimizador logístico</span></div>')
         for titulo_seccion, entradas in secciones.items():
             st.html(f'<div class="nav-titulo">{titulo_seccion}</div>')
             for entrada in entradas:

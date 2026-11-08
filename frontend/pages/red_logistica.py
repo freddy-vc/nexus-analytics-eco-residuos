@@ -1,6 +1,7 @@
 import streamlit as st
 
 from backend.network.graph_builder import NodoRed, construir_red, resumir
+from backend.services.genetic_service import ServicioGenetico
 from backend.services.optimization_service import ServicioOptimizacion
 from frontend.components import header, network_graph, session, theme_toggle
 from frontend.components import formatters as fmt
@@ -9,7 +10,14 @@ from frontend.components.kpi_cards import clave_valor, insignia
 header.mostrar("Optimización", "Red logística G = (V, A)")
 escenario = session.cargar_escenario()
 ejecucion = ServicioOptimizacion().ultima_exacta(escenario)
-flujos = ejecucion.flujos if ejecucion and ejecucion.flujos is not None else None
+lote = ServicioGenetico().ultimo_lote(escenario)
+SOLUCIONES = ["Exacto (Simplex)"] + (["Algoritmo genético (mejor corrida)"] if lote else [])
+if st.session_state.get("solucion_grafo") not in SOLUCIONES:
+    st.session_state.solucion_grafo = SOLUCIONES[0]
+if st.session_state.solucion_grafo == SOLUCIONES[0]:
+    flujos = ejecucion.flujos if ejecucion and ejecucion.flujos is not None else None
+else:
+    flujos = lote.flujos_mejor
 
 origenes = [NodoRed(e.codigo, e.municipio, e.oferta, e.municipio, e.latitud, e.longitud)
             for e in escenario.empresas]
@@ -28,11 +36,10 @@ with columna_grafo.container(key="tarjeta_grafo"):
         st.html('<div class="espaciador"></div>')
         st.html('<span class="etiqueta-linea">Solución</span>')
         with st.container(key="caja_solucion"):
-            st.selectbox("Solución", ["Exacto (Simplex)"], key="solucion_grafo",
-                         label_visibility="collapsed")
+            st.selectbox("Solución", SOLUCIONES, key="solucion_grafo", label_visibility="collapsed")
     ver_flujos = vista == "Flujos óptimos"
     if ver_flujos and flujos is None:
-        st.html('<div class="nota wa">Aún no hay una solución exacta para este escenario; '
+        st.html('<div class="nota wa">Aún no hay una solución para este escenario; '
                 'resuélvela en Método exacto para ver los flujos óptimos.</div>')
     if grafo.number_of_nodes():
         network_graph.mostrar(grafo, ver_flujos and flujos is not None, theme_toggle.paleta())

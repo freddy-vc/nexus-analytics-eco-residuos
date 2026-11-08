@@ -10,6 +10,8 @@ from backend.database import (BaseDatos, Ejecucion, Empresa, Escenario, Escenari
 from backend.exact.transport_model import ProblemaTransporte
 from backend.network.balance import TipoBalance, verificar_balance
 from backend.network.cost_matrix import alfa_efectivo, costos_unitarios, factor_desde_costo
+from backend.sensitivity.scenario_simulator import (ALFA, COSTO_OPERACION, DEMANDA, OFERTA,
+                                                    DatosModelo)
 from backend.utils.exceptions import ErrorNoEncontrado, ErrorValidacion
 from backend.utils.singleton import MetaSingleton
 
@@ -115,6 +117,10 @@ class DatosEscenario:
     def costos_unitarios(self) -> np.ndarray:
         return costos_unitarios(self.alfa_efectivo, np.nan_to_num(self.distancias),
                                 self.costos_operacion, self.precios_compra)
+
+    def modelo(self) -> DatosModelo:
+        return DatosModelo(self.oferta, self.demanda, np.nan_to_num(self.distancias), self.costos_operacion,
+                           self.precios_compra, self.alfa_efectivo, self.habilitadas.copy())
 
     def problema(self) -> ProblemaTransporte:
         return ProblemaTransporte(self.oferta, self.demanda, self.costos_unitarios,
@@ -288,6 +294,29 @@ class ServicioEscenarios(metaclass=MetaSingleton):
             sesion.add(copia)
             sesion.flush()
             return copia.id
+
+    def aplicar_variacion(self, escenario_id: int, tipo: str, empresa_id: int | None,
+                          planta_id: int | None, variacion_pct: float) -> None:
+        """Multiplica un parámetro del escenario por (1 + variación %); sin empresa o planta aplica a todas."""
+        factor = 1 + variacion_pct / 100
+        with self._bd.sesion() as sesion:
+            escenario = sesion.scalar(select(Escenario).where(Escenario.id == escenario_id).options(
+                selectinload(Escenario.empresas), selectinload(Escenario.plantas)))
+            if escenario is None:
+                raise ErrorNoEncontrado("El escenario seleccionado no existe.")
+            if tipo == ALFA:
+                escenario.factor_transporte_pct = round(float(escenario.factor_transporte_pct) * factor, 6)
+            elif tipo == OFERTA:
+                for v in escenario.empresas:
+                    if empresa_id is None or v.empresa_id == empresa_id:
+                        v.oferta_t_semana = round(float(v.oferta_t_semana) * factor, 2)
+            elif tipo in (DEMANDA, COSTO_OPERACION):
+                for v in escenario.plantas:
+                    if planta_id is None or v.planta_id == planta_id:
+                        if tipo == DEMANDA:
+                            v.demanda_t_semana = round(float(v.demanda_t_semana) * factor, 2)
+                        else:
+                            v.costo_operacion_cop_t = round(float(v.costo_operacion_cop_t) * factor, 2)
 
     @staticmethod
     def _nombre_copia(sesion, usuario_id: int, base: str) -> str:

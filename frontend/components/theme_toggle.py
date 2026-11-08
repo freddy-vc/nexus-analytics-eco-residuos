@@ -61,7 +61,7 @@ def _css_estatico(version: float) -> str:
     iconos_nav = "".join(
         f'[class*="st-key-nav_{nombre}_"]{{--icono:{icons.url_mascara(nombre)};}}\n'
         for nombre in ("inicio", "empresas", "plantas", "rutas", "parametros", "red", "exacto",
-                       "escenarios"))
+                       "genetico", "sensibilidad", "escenarios", "comparacion"))
     iconos_accion = (f'[class*="st-key-accion_editar"]{{--icono:{icons.url_mascara("editar")};}}\n'
                      f'[class*="st-key-accion_eliminar"]{{--icono:{icons.url_mascara("eliminar")};}}\n'
                      f':root{{--icono-buscar:{icons.url_mascara("buscar")};}}\n')
