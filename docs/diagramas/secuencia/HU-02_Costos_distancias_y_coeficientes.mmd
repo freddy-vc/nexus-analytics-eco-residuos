@@ -1,0 +1,52 @@
+%%{init: {"theme": "base", "fontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "themeVariables": {"actorBkg": "#FFFFFF", "actorBorder": "#3F3F46", "actorTextColor": "#27272A", "actorLineColor": "#3F3F46", "signalColor": "#27272A", "signalTextColor": "#27272A", "labelBoxBkgColor": "#FFFFFF", "labelBoxBorderColor": "#3F3F46", "labelTextColor": "#27272A", "loopTextColor": "#3F3F46", "noteBkgColor": "#FFFBEB", "noteBorderColor": "#E5C07B", "noteTextColor": "#3F3F46", "activationBkgColor": "#F4F4F5", "activationBorderColor": "#A1A1AA"}, "sequence": {"messageFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "actorFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "noteFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "messageFontSize": 14, "actorFontSize": 14, "noteFontSize": 13, "mirrorActors": true, "actorMargin": 60, "messageMargin": 32, "boxMargin": 8, "noteMargin": 10, "width": 170, "height": 56, "useMaxWidth": false}, "themeCSS": ".actor-line{stroke:#3F3F46 !important;stroke-width:1.3px !important}.actor-man line,.actor-man circle{stroke:#D946EF !important;stroke-width:2px !important}.actor-man circle{fill:#FFFFFF !important}text.actor-man,text.actor tspan{fill:#27272A !important}.messageLine0,.messageLine1{stroke:#27272A !important;stroke-width:1.4px !important}.loopLine{stroke:#3F3F46 !important;stroke-dasharray:2 3 !important;stroke-width:1.2px !important}.labelBox{fill:#FFFFFF !important;stroke:#3F3F46 !important}.loopText,.loopText tspan{fill:#3F3F46 !important}rect.actor{rx:8px;ry:8px;stroke-width:1.6px !important;filter:drop-shadow(0 2px 3px rgba(0,0,0,.12))}rect.actor[name=ESC]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=DE]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=BD]{fill:#E8FBFF !important;stroke:#22CCEE !important}rect.actor[name=SES]{fill:#FFF1F1 !important;stroke:#F07070 !important}"}}%%
+%% HU-02 · Costos, distancias y coeficientes
+sequenceDiagram
+    actor A as Analista
+    participant ESC as ServicioEscenarios
+    participant DE as escenario: DatosEscenario
+    participant BD as BaseDatos
+    participant SES as Session (SQLAlchemy)
+    A->>+ESC: cargar(escenario_id: int): DatosEscenario
+    ESC-->>-A: DatosEscenario
+
+    A->>+DE: «property» costos_unitarios(): np.ndarray
+    DE->>DE: «property» alfa_efectivo(): float
+    DE->>DE: «property» costos_operacion(): np.ndarray
+    DE->>DE: «property» precios_compra(): np.ndarray
+    DE-->>-A: np.ndarray
+    A->>+ESC: guardar_alfa(escenario_id: int, costo_transporte: float): None
+    alt costo de transporte ≤ 0
+        ESC-->>A: ErrorValidacion
+    else válido
+        ESC->>+BD: sesion(): Iterator[Session]
+        BD-->>-ESC: Session
+        ESC->>ESC: _obtener(sesion: Session, escenario_id: int): Escenario
+        ESC->>+SES: get(entity: type[Escenario], ident: int): Escenario | None
+        SES-->>-ESC: Escenario | None
+        Note over ESC: factor_transporte_pct = factor_desde_costo(costo_transporte, alfa_base)
+        BD->>+SES: commit(): None
+        SES-->>-BD: None
+        ESC-->>A: None
+    end
+    deactivate ESC
+    A->>+ESC: guardar_distancias(distancias: dict[int, float]): None
+    alt alguna distancia negativa
+        ESC-->>A: ErrorValidacion
+    else válidas
+        ESC->>+BD: sesion(): Iterator[Session]
+        BD-->>-ESC: Session
+        ESC->>+SES: scalars(statement: Select[tuple[Ruta]]): ScalarResult[Ruta]
+        SES-->>-ESC: ScalarResult[Ruta]
+        BD->>+SES: commit(): None
+        SES-->>-BD: None
+        ESC-->>A: None
+    end
+    deactivate ESC
+    A->>+ESC: guardar_parametros(escenario_id: int, nombre: str, factor: float,<br/>empresas: dict[int, tuple[float, float]], plantas: dict[int, tuple[float,<br/>float]]): None
+    ESC->>+BD: sesion(): Iterator[Session]
+    BD-->>-ESC: Session
+    ESC->>ESC: _obtener(sesion: Session, escenario_id: int): Escenario
+    ESC->>ESC: _validar_nombre_libre(sesion: Session, usuario_id: int, nombre: str,<br/>excluir_id: int | None): None
+    BD->>+SES: commit(): None
+    SES-->>-BD: None
+    ESC-->>-A: None

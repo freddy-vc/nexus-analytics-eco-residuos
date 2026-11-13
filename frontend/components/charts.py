@@ -1,37 +1,34 @@
-"""Gráficos ligeros en HTML que heredan los colores del tema."""
-
 import base64
 
 
+# Barra de progreso en HTML.
 def progreso(porcentaje: float, delgada: bool = False) -> str:
     ancho = max(0.0, min(porcentaje, 100.0))
     return f'<div class="barra{" delgada" if delgada else ""}"><div style="width:{ancho:.1f}%"></div></div>'
 
 
+# Fila de utilización de una planta con su barra de progreso.
 def fila_utilizacion(codigo: str, nombre: str, usado: str, capacidad: str, porcentaje: float) -> str:
     return (f'<div class="utilizacion"><div><span><strong>{codigo}</strong> · {nombre}</span>'
             f'<span class="mu">{usado} / {capacidad} t</span></div>{progreso(porcentaje)}</div>')
 
 
+# Barra apilada; cada parte es (fracción, color CSS, opacidad).
 def barra_apilada(partes: list[tuple[float, str, float]]) -> str:
-    """partes: (fracción 0–1, color CSS, opacidad)."""
     segmentos = "".join(
         f'<div style="width:{fraccion * 100:.1f}%;background:{color};opacity:{opacidad}"></div>'
         for fraccion, color, opacidad in partes)
     return f'<div class="barra-apilada">{segmentos}</div>'
 
 
+# Esquema decorativo de la portada; se entrega como imagen porque st.html no admite SVG.
 def red_portada(paleta: dict[str, str]) -> str:
-    """Esquema decorativo de la portada: empresas conectadas a plantas.
-
-    Se entrega como imagen porque st.html no admite SVG en línea; por eso los
-    colores se toman directamente de la paleta del tema activo.
-    """
     empresas = [(40, 30), (40, 70), (40, 110), (40, 150), (40, 190)]
     plantas = [(300, 50), (300, 110), (300, 170)]
     rutas = [(0, 0), (1, 0), (1, 1), (2, 2), (3, 1), (4, 2)]
     optimas = [(0, 1), (2, 0), (3, 2)]
 
+    # Curva entre una empresa y una planta del esquema.
     def linea(i, j):
         (x1, y1), (x2, y2) = empresas[i], plantas[j]
         return f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}"/>'
@@ -49,6 +46,7 @@ def red_portada(paleta: dict[str, str]) -> str:
             f'alt="Esquema de la red: empresas conectadas a plantas">')
 
 
+# Figura de Plotly con los colores, la tipografía y los ejes del tema.
 def _figura_base(paleta: dict[str, str], alto: int, titulo_x: str, titulo_y: str):
     import plotly.graph_objects as go
 
@@ -65,9 +63,9 @@ def _figura_base(paleta: dict[str, str], alto: int, titulo_x: str, titulo_y: str
     return figura
 
 
+# Curva de convergencia del AG: mejor costo y costo promedio por generación.
 def figura_convergencia(generaciones: list[int], mejor: list[float], promedio: list[float],
                         optimo: float | None, paleta: dict[str, str]):
-    """Evolución del mejor costo y del costo promedio de la población por generación."""
     import plotly.graph_objects as go
 
     figura = _figura_base(paleta, 300, "Generación", "Costo semanal (COP)")
@@ -87,9 +85,9 @@ def figura_convergencia(generaciones: list[int], mejor: list[float], promedio: l
     return figura
 
 
+# Costo de cada punto de la simulación; resalta dónde cambia el plan de rutas.
 def figura_simulacion(etiquetas: list[str], exacto: list[float | None], genetico: list[float | None] | None,
                       cambia_plan: list[bool], paleta: dict[str, str]):
-    """Costo óptimo en cada punto de la simulación; los puntos donde cambia el plan se resaltan."""
     import plotly.graph_objects as go
 
     figura = _figura_base(paleta, 320, "Variación del parámetro", "Costo semanal (COP)")

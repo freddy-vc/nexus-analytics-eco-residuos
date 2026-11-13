@@ -16,25 +16,23 @@ class EntradaMenu:
     titulo: str
     pagina: st.Page | None = None
 
+    # Una entrada sin página asociada aparece deshabilitada.
     @property
     def bloqueada(self) -> bool:
         return self.pagina is None
 
 
+# Logo de la aplicación como URI de datos.
 @st.cache_resource
 def uri_logo() -> str:
     datos = base64.b64encode((RAIZ / "assets/logo/ecoresiduos.svg").read_bytes()).decode()
     return f"data:image/svg+xml;base64,{datos}"
 
 
+# Menú lateral con el logo, las secciones y los enlaces con ícono.
 def mostrar(secciones: dict[str, list[EntradaMenu]], actual: st.Page) -> None:
-    """Menú lateral: logo, secciones y enlaces con ícono.
-
-    Los módulos de fases posteriores aparecen en gris y no navegan.
-    """
     with st.sidebar:
-        st.html(f'<div class="marca"><img src="{uri_logo()}" alt="EcoResiduos">'
-                f'<span>Optimizador logístico</span></div>')
+        st.html(f'<div class="marca"><img src="{uri_logo()}" alt="EcoResiduos">')
         for titulo_seccion, entradas in secciones.items():
             st.html(f'<div class="nav-titulo">{titulo_seccion}</div>')
             for entrada in entradas:

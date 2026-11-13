@@ -23,19 +23,19 @@ class FilaComparacion:
     milisegundos_ag: float | None
     corridas_ag: int
 
+    # Desviación porcentual del AG frente al método exacto.
     @property
     def gap(self) -> float | None:
         return gap(self.costo_ag, self.costo_exacto)
 
 
 class ServicioComparacion(metaclass=MetaSingleton):
-    """Resultados del método exacto y del AG por escenario, y registro de comparaciones."""
-
+    # Obtiene la instancia única de la base de datos.
     def __init__(self):
         self._bd = BaseDatos()
 
+    # Por escenario: última solución exacta y mejor corrida del último lote del AG.
     def por_escenarios(self, ids: list[int] | None = None) -> list[FilaComparacion]:
-        """Por escenario: la última solución exacta y la mejor corrida del último lote del AG."""
         with self._bd.sesion() as sesion:
             consulta = select(Escenario).order_by(Escenario.es_base.desc(), Escenario.creado_en)
             if ids:
@@ -65,8 +65,8 @@ class ServicioComparacion(metaclass=MetaSingleton):
                     len(lote)))
             return filas
 
+    # Registra la pareja de ejecuciones comparadas una sola vez.
     def registrar(self, exacta_id: int, ag_id: int, observaciones: str | None = None) -> None:
-        """Guarda la pareja comparada (una sola vez por pareja)."""
         with self._bd.sesion() as sesion:
             existe = sesion.scalar(select(Comparacion.id).where(Comparacion.ejecucion_exacta_id == exacta_id,
                                                                 Comparacion.ejecucion_ag_id == ag_id))

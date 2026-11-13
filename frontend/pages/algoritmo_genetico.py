@@ -24,16 +24,19 @@ exacta = ServicioOptimizacion().ultima_exacta(escenario)
 optimo = exacta.objetivo if exacta and exacta.es_optima else None
 
 
+# Carga los parámetros en los campos del formulario.
 def cargar_parametros(parametros: ParametrosAG, corridas: int = 30) -> None:
     for campo, valor in asdict(parametros).items():
         st.session_state[f"ag_{campo}"] = valor if valor is not None else 0
     st.session_state.ag_corridas = corridas
 
 
+# Restablece los parámetros por defecto.
 def restablecer():
     cargar_parametros(ParametrosAG())
 
 
+# Parámetros del AG capturados en el formulario.
 def parametros_formulario() -> ParametrosAG:
     e = st.session_state
     return ParametrosAG(
@@ -91,6 +94,7 @@ with columna_resultados:
         corridas = 1 if una else int(st.session_state.ag_corridas)
         barra = progreso.progress(0.0, text="Preparando la población inicial…")
 
+        # Actualiza la barra de progreso de las corridas.
         def avanzar(corrida: int, total: int, generacion: int, generaciones: int):
             hecho = ((corrida - 1) + generacion / generaciones) / total
             barra.progress(min(hecho, 1.0), text=f"Corrida {corrida} de {total} · generación "

@@ -1,0 +1,87 @@
+%%{init: {"theme": "base", "fontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "themeVariables": {"actorBkg": "#FFFFFF", "actorBorder": "#3F3F46", "actorTextColor": "#27272A", "actorLineColor": "#3F3F46", "signalColor": "#27272A", "signalTextColor": "#27272A", "labelBoxBkgColor": "#FFFFFF", "labelBoxBorderColor": "#3F3F46", "labelTextColor": "#27272A", "loopTextColor": "#3F3F46", "noteBkgColor": "#FFFBEB", "noteBorderColor": "#E5C07B", "noteTextColor": "#3F3F46", "activationBkgColor": "#F4F4F5", "activationBorderColor": "#A1A1AA"}, "sequence": {"messageFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "actorFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "noteFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "messageFontSize": 14, "actorFontSize": 14, "noteFontSize": 13, "mirrorActors": true, "actorMargin": 60, "messageMargin": 32, "boxMargin": 8, "noteMargin": 10, "width": 170, "height": 56, "useMaxWidth": false}, "themeCSS": ".actor-line{stroke:#3F3F46 !important;stroke-width:1.3px !important}.actor-man line,.actor-man circle{stroke:#D946EF !important;stroke-width:2px !important}.actor-man circle{fill:#FFFFFF !important}text.actor-man,text.actor tspan{fill:#27272A !important}.messageLine0,.messageLine1{stroke:#27272A !important;stroke-width:1.4px !important}.loopLine{stroke:#3F3F46 !important;stroke-dasharray:2 3 !important;stroke-width:1.2px !important}.labelBox{fill:#FFFFFF !important;stroke:#3F3F46 !important}.loopText,.loopText tspan{fill:#3F3F46 !important}rect.actor{rx:8px;ry:8px;stroke-width:1.6px !important;filter:drop-shadow(0 2px 3px rgba(0,0,0,.12))}rect.actor[name=ESC]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=SOP]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=RED]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=BD]{fill:#E8FBFF !important;stroke:#22CCEE !important}rect.actor[name=SES]{fill:#FFF1F1 !important;stroke:#F07070 !important}rect.actor[name=EE]{fill:#F3EFFF !important;stroke:#A285F0 !important}"}}%%
+%% HU-01 · Gestión de plantas
+sequenceDiagram
+    actor A as Analista
+    participant ESC as ServicioEscenarios
+    participant SOP as ServicioOptimizacion
+    participant RED as ServicioRed
+    participant BD as BaseDatos
+    participant SES as Session (SQLAlchemy)
+    participant EE as ejecucion: EjecucionExacta
+    A->>+ESC: cargar(escenario_id: int): DatosEscenario
+    ESC-->>-A: DatosEscenario
+
+    A->>+SOP: ultima_exacta(escenario: DatosEscenario,<br/>ejecucion_id: int | None): EjecucionExacta | None
+    SOP-->>-A: EjecucionExacta | None
+    A->>+RED: municipios(): list[ElementoCatalogo]
+    RED-->>-A: list[ElementoCatalogo]
+    alt crear planta
+        A->>+RED: siguiente_codigo(prefijo: str): str
+        RED-->>-A: str
+        A->>+RED: crear_planta(escenario_id: int, datos: DatosPlanta): None
+        RED->>RED: _limpiar_planta(datos: DatosPlanta): DatosPlanta
+        RED->>+BD: sesion(): Iterator[Session]
+        BD-->>-RED: Session
+        RED->>RED: _escenario(sesion: Session, escenario_id: int): Escenario
+        RED->>+SES: get(entity: type[Escenario], ident: int): Escenario | None
+        SES-->>-RED: Escenario | None
+        RED->>RED: _validar_planta_unica(sesion: Session, codigo: str,<br/>excluir_id: int | None): None
+        RED->>+SES: scalar(statement: Select[tuple[Planta]]): Planta | None
+        SES-->>-RED: Planta | None
+        alt sin código o municipio, valores negativos o código repetido
+            RED-->>A: ErrorValidacion
+        else datos válidos
+            RED->>+SES: get(entity: type[Municipio], ident: int): Municipio | None
+            SES-->>-RED: Municipio | None
+            loop por cada empresa del escenario
+                RED->>+SES: add(instance: Ruta): None
+                SES-->>-RED: None
+            end
+            BD->>+SES: commit(): None
+            SES-->>-BD: None
+            RED-->>A: None
+        end
+        deactivate RED
+    else editar planta
+        A->>+RED: actualizar_planta(planta_id: int, id_vinculo: int, datos: DatosPlanta): None
+        RED->>RED: _limpiar_planta(datos: DatosPlanta): DatosPlanta
+        RED->>+BD: sesion(): Iterator[Session]
+        BD-->>-RED: Session
+        RED->>+SES: get(entity: type[Planta], ident: int): Planta | None
+        SES-->>-RED: Planta | None
+        RED->>+SES: get(entity: type[EscenarioPlanta], ident: int): EscenarioPlanta | None
+        SES-->>-RED: EscenarioPlanta | None
+        alt la planta ya no existe
+            RED-->>A: ErrorNoEncontrado
+        else existe
+            RED->>RED: _validar_planta_unica(sesion: Session, codigo: str,<br/>excluir_id: int | None): None
+            opt cambió el municipio
+                RED->>+SES: get(entity: type[Municipio], ident: int): Municipio | None
+                SES-->>-RED: Municipio | None
+            end
+            BD->>+SES: commit(): None
+            SES-->>-BD: None
+            RED-->>A: None
+        end
+        deactivate RED
+    else eliminar planta
+        A->>+RED: eliminar_planta(planta_id: int): None
+        RED->>+BD: sesion(): Iterator[Session]
+        BD-->>-RED: Session
+        RED->>+SES: get(entity: type[Planta], ident: int): Planta | None
+        SES-->>-RED: Planta | None
+        alt la planta ya no existe
+            RED-->>A: ErrorNoEncontrado
+        else existe
+            RED->>+SES: execute(statement: Delete): Result
+            SES-->>-RED: Result
+            RED->>+SES: execute(statement: Delete): Result
+            SES-->>-RED: Result
+            RED->>+SES: delete(instance: Planta): None
+            SES-->>-RED: None
+            BD->>+SES: commit(): None
+            SES-->>-BD: None
+            RED-->>A: None
+        end
+        deactivate RED
+    end

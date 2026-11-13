@@ -1,12 +1,3 @@
-"""Grafo interactivo G = (V, A) sobre la ubicación geográfica de cada nodo.
-
-NetworkX arma el grafo y la posición inicial (coordenadas del municipio). En el
-navegador una simulación de fuerzas mantiene cada nodo cerca de su ubicación
-real, evita que los nodos se superpongan y que una arista pase por encima de
-un nodo que no le pertenece. Los nodos se pueden arrastrar y el resto se
-acomoda solo.
-"""
-
 import json
 from pathlib import Path
 
@@ -18,6 +9,7 @@ from backend.network.graph_builder import kilometros_por_unidad, posiciones_geog
 PLANTILLA = Path(__file__).resolve().parents[1] / "templates" / "red_interactiva.html"
 
 
+# Grafo interactivo; una simulación de fuerzas en el navegador mantiene cada nodo cerca de su municipio.
 def mostrar(grafo: nx.DiGraph, ver_flujos: bool, paleta: dict[str, str], alto: int = 600) -> None:
     posiciones = posiciones_geograficas(grafo)
     nodos = [{

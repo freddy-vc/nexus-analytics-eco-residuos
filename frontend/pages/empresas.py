@@ -16,8 +16,8 @@ nombres_municipio = {m.id: m.nombre for m in servicio.municipios()}
 nombres_tipo = {t.id: t.nombre for t in servicio.tipos_residuo()}
 
 
+# Campos del formulario de empresa; devuelve los datos capturados.
 def campos_empresa(prefijo: str, fila: FilaEmpresa | None, codigo: str) -> DatosEmpresa:
-    """Campos comunes del formulario de empresa; devuelve los valores capturados."""
     c1, c2 = st.columns(2)
     codigo = c1.text_input("Código", value=codigo, key=f"{prefijo}_codigo")
     nit = c2.text_input("NIT", value=(fila.nit or "") if fila else "", placeholder="Opcional",
@@ -39,6 +39,7 @@ def campos_empresa(prefijo: str, fila: FilaEmpresa | None, codigo: str) -> Datos
     return DatosEmpresa(codigo, nombre, nit, municipio, tipo, oferta, precio)
 
 
+# Diálogo para crear una empresa.
 @st.dialog("Nueva empresa")
 def dialogo_crear():
     datos = campos_empresa("nueva", None, servicio.siguiente_codigo("E"))
@@ -54,6 +55,7 @@ def dialogo_crear():
         st.rerun()
 
 
+# Diálogo de confirmación para eliminar una empresa.
 @st.dialog("Eliminar empresa")
 def dialogo_eliminar(fila: FilaEmpresa):
     st.html(f'<p style="font-size:14px">¿Eliminar la empresa <strong>{fila.codigo} · {fila.nombre}</strong> '
@@ -68,6 +70,7 @@ def dialogo_eliminar(fila: FilaEmpresa):
         st.rerun()
 
 
+# Diálogo para editar una empresa.
 @st.dialog("Editar empresa")
 def dialogo_editar(fila: FilaEmpresa):
     estado = insignia("Activa") if fila.activa else insignia("Inactiva", "wa")

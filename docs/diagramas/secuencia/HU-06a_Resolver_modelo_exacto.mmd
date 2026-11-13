@@ -1,0 +1,79 @@
+%%{init: {"theme": "base", "fontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "themeVariables": {"actorBkg": "#FFFFFF", "actorBorder": "#3F3F46", "actorTextColor": "#27272A", "actorLineColor": "#3F3F46", "signalColor": "#27272A", "signalTextColor": "#27272A", "labelBoxBkgColor": "#FFFFFF", "labelBoxBorderColor": "#3F3F46", "labelTextColor": "#27272A", "loopTextColor": "#3F3F46", "noteBkgColor": "#FFFBEB", "noteBorderColor": "#E5C07B", "noteTextColor": "#3F3F46", "activationBkgColor": "#F4F4F5", "activationBorderColor": "#A1A1AA"}, "sequence": {"messageFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "actorFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "noteFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "messageFontSize": 14, "actorFontSize": 14, "noteFontSize": 13, "mirrorActors": true, "actorMargin": 60, "messageMargin": 32, "boxMargin": 8, "noteMargin": 10, "width": 170, "height": 56, "useMaxWidth": false}, "themeCSS": ".actor-line{stroke:#3F3F46 !important;stroke-width:1.3px !important}.actor-man line,.actor-man circle{stroke:#D946EF !important;stroke-width:2px !important}.actor-man circle{fill:#FFFFFF !important}text.actor-man,text.actor tspan{fill:#27272A !important}.messageLine0,.messageLine1{stroke:#27272A !important;stroke-width:1.4px !important}.loopLine{stroke:#3F3F46 !important;stroke-dasharray:2 3 !important;stroke-width:1.2px !important}.labelBox{fill:#FFFFFF !important;stroke:#3F3F46 !important}.loopText,.loopText tspan{fill:#3F3F46 !important}rect.actor{rx:8px;ry:8px;stroke-width:1.6px !important;filter:drop-shadow(0 2px 3px rgba(0,0,0,.12))}rect.actor[name=ESC]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=SOP]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=DE]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=MT]{fill:#EAFAF0 !important;stroke:#4CCF7A !important}rect.actor[name=EB]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=BD]{fill:#E8FBFF !important;stroke:#22CCEE !important}rect.actor[name=SES]{fill:#FFF1F1 !important;stroke:#F07070 !important}rect.actor[name=EE]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=RF]{fill:#F3EFFF !important;stroke:#A285F0 !important}"}}%%
+%% HU-06 · Resolución con el modelo exacto
+sequenceDiagram
+    actor A as Analista
+    participant ESC as ServicioEscenarios
+    participant SOP as ServicioOptimizacion
+    participant DE as escenario: DatosEscenario
+    participant MT as ModeloTransporte
+    participant EB as balance: EstadoBalance
+    participant BD as BaseDatos
+    participant SES as Session (SQLAlchemy)
+    participant EE as ejecucion: EjecucionExacta
+    participant RF as factibilidad: ReporteFactibilidad
+    A->>+ESC: cargar(escenario_id: int): DatosEscenario
+    ESC-->>-A: DatosEscenario
+
+    A->>+SOP: resolver_exacto(escenario: DatosEscenario): EjecucionExacta
+    alt sin empresas o plantas, o sin rutas habilitadas
+        SOP-->>A: ErrorValidacion
+    else datos completos
+        SOP->>+DE: problema(): ProblemaTransporte
+        DE->>DE: «property» costos_unitarios(): np.ndarray
+        DE-->>-SOP: ProblemaTransporte
+        SOP->>+MT: ModeloTransporte(problema: ProblemaTransporte, simplex: Simplex | None)
+        MT-->>-SOP: ModeloTransporte
+        SOP->>+MT: resolver(): SolucionTransporte
+        Note over MT: Ver HU-06b
+        MT-->>-SOP: SolucionTransporte
+        SOP->>SOP: _mensaje_balance(balance: EstadoBalance, escenario: DatosEscenario): str
+        opt oferta y demanda desbalanceadas
+            SOP->>+EB: «property» diferencia(): float
+            EB-->>-SOP: float
+        end
+        SOP->>+BD: sesion(): Iterator[Session]
+        BD-->>-SOP: Session
+        SOP->>SOP: _id_catalogo(sesion: Session, modelo: type[ModeloBase], nombre: str): int
+        SOP->>+SES: scalar(statement: Select[tuple[int]]): int | None
+        SES-->>-SOP: int | None
+        SOP->>+SES: add(instance: Ejecucion): None
+        SES-->>-SOP: None
+        SOP->>+SES: flush(): None
+        SES-->>-SOP: None
+        opt hay flujos óptimos
+            SOP->>+DE: problema(): ProblemaTransporte
+            DE-->>-SOP: ProblemaTransporte
+            Note over SOP: analysis.analizar(problema) calcula precios sombra y rangos (ver HU-09)
+            SOP->>SOP: _guardar_resultados(sesion: Session, ejecucion_id: int,<br/>escenario: DatosEscenario, flujos: np.ndarray,<br/>analisis: AnalisisSensibilidad | None): None
+            SOP->>+SES: add_all(instances: Iterable[ResultadoRuta]): None
+            SES-->>-SOP: None
+            SOP->>+SES: add_all(instances: Iterable[SensibilidadOferta]): None
+            SES-->>-SOP: None
+            SOP->>+SES: add_all(instances: Iterable[SensibilidadDemanda]): None
+            SES-->>-SOP: None
+        end
+        BD->>+SES: commit(): None
+        SES-->>-BD: None
+        SOP->>SOP: ultima_exacta(escenario: DatosEscenario,<br/>ejecucion_id: int | None): EjecucionExacta | None
+        SOP->>+SES: scalars(statement: Select[tuple[Ejecucion]]): ScalarResult[Ejecucion]
+        SES-->>-SOP: ScalarResult[Ejecucion]
+        SOP->>SOP: _a_ejecucion(ejecucion: Ejecucion, escenario: DatosEscenario): EjecucionExacta
+        SOP->>+DE: «property» alfa_efectivo(): float
+        DE-->>-SOP: float
+        SOP->>+DE: «property» oferta(): np.ndarray
+        DE-->>-SOP: np.ndarray
+        SOP->>+DE: «property» demanda(): np.ndarray
+        DE-->>-SOP: np.ndarray
+        Note over SOP: desglose_costo(...) y validar_solucion(...) arman el desglose y la verificación de factibilidad
+        SOP->>+EE: EjecucionExacta(ejecucion_id: int, estado: str, objetivo: float | None,<br/>milisegundos: float, iteraciones: int, ejecutada_en: datetime,<br/>mensaje: str | None, flujos: np.ndarray | None, balance: EstadoBalance,<br/>desglose: DesgloseCosto | None, factibilidad: ReporteFactibilidad | None,<br/>num_variables: int, num_restricciones: int)
+        EE-->>-SOP: EjecucionExacta
+        SOP-->>A: EjecucionExacta
+    end
+    deactivate SOP
+    A->>+EE: «property» es_optima(): bool
+    EE-->>-A: bool
+    A->>+EE: «property» costo_total(): float | None
+    EE-->>-A: float | None
+    A->>+RF: «property» es_factible(): bool
+    RF->>RF: «property» violaciones(): int
+    RF-->>-A: bool

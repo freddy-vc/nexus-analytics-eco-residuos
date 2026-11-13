@@ -16,10 +16,12 @@ class EstadoBalance:
     demanda_total: float
     tipo: TipoBalance
 
+    # Oferta total menos demanda total.
     @property
     def diferencia(self) -> float:
         return self.oferta_total - self.demanda_total
 
+    # Indica si la oferta y la demanda totales coinciden.
     @property
     def esta_balanceado(self) -> bool:
         return self.tipo is TipoBalance.BALANCEADO
@@ -42,6 +44,7 @@ class ProblemaBalanceado:
     destino_ficticio: bool
 
 
+# Clasifica el problema como balanceado, con exceso de oferta o con exceso de demanda.
 def verificar_balance(oferta: np.ndarray, demanda: np.ndarray, tolerancia: float = 1e-6) -> EstadoBalance:
     oferta_total, demanda_total = float(np.sum(oferta)), float(np.sum(demanda))
     diferencia = oferta_total - demanda_total
@@ -54,16 +57,13 @@ def verificar_balance(oferta: np.ndarray, demanda: np.ndarray, tolerancia: float
     return EstadoBalance(oferta_total, demanda_total, tipo)
 
 
+# Agrega una planta o empresa ficticia de costo cero cuando el problema no está balanceado.
 def balancear_problema(oferta, demanda, costos, habilitadas, tolerancia: float = 1e-6) -> ProblemaBalanceado:
-    """Agrega un nodo ficticio de costo cero cuando ΣOᵢ ≠ ΣDⱼ (RF08).
-
-    Con oferta mayor se agrega una planta ficticia que recibe el excedente;
-    con oferta menor, una empresa ficticia que representa la capacidad ociosa.
-    """
     estado = verificar_balance(oferta, demanda, tolerancia)
     oferta, demanda = np.asarray(oferta, float), np.asarray(demanda, float)
     costos, habilitadas = np.asarray(costos, float), np.asarray(habilitadas, bool)
 
+    # Oferta mayor: planta ficticia con D = Σ O_i − Σ D_j y costo cero.
     if estado.tipo is TipoBalance.EXCESO_OFERTA:
         return ProblemaBalanceado(
             oferta, np.append(demanda, estado.diferencia),
@@ -71,6 +71,7 @@ def balancear_problema(oferta, demanda, costos, habilitadas, tolerancia: float =
             np.hstack([habilitadas, np.ones((len(oferta), 1), bool)]),
             origen_ficticio=False, destino_ficticio=True)
 
+    # Oferta menor: empresa ficticia con O = Σ D_j − Σ O_i y costo cero.
     if estado.tipo is TipoBalance.EXCESO_DEMANDA:
         return ProblemaBalanceado(
             np.append(oferta, -estado.diferencia), demanda,
@@ -81,6 +82,7 @@ def balancear_problema(oferta, demanda, costos, habilitadas, tolerancia: float =
     return ProblemaBalanceado(oferta, demanda, costos, habilitadas, False, False)
 
 
+# Verificaciones previas a resolver: valores no negativos, datos completos y balance.
 def validar_datos(oferta, demanda, distancias, costos_operacion, alfa, precios_compra,
                   habilitadas) -> list[Verificacion]:
     oferta, demanda = np.asarray(oferta, float), np.asarray(demanda, float)

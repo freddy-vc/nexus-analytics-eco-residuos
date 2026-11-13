@@ -1,5 +1,3 @@
-"""Simulación de variaciones porcentuales de un parámetro del modelo."""
-
 from dataclasses import dataclass
 from typing import Callable
 
@@ -20,7 +18,6 @@ MAX_PUNTOS = 21
 
 @dataclass(frozen=True)
 class DatosModelo:
-    """Datos de entrada del modelo, independientes de la base de datos."""
     oferta: np.ndarray
     demanda: np.ndarray
     distancias: np.ndarray
@@ -41,6 +38,7 @@ class PuntoSimulacion:
     balance: TipoBalance
     cambia_plan: bool
 
+    # Desviación porcentual del AG frente al método exacto en el punto simulado.
     @property
     def gap(self) -> float | None:
         if self.costo_exacto and self.costo_ag is not None:
@@ -48,6 +46,7 @@ class PuntoSimulacion:
         return None
 
 
+# Valores porcentuales de la simulación entre el mínimo y el máximo con el paso indicado.
 def variaciones(minimo: float, maximo: float, paso: float) -> list[float]:
     if paso <= 0 or minimo >= maximo:
         raise ValueError("La variación mínima debe ser menor que la máxima y el paso mayor que 0.")
@@ -57,8 +56,9 @@ def variaciones(minimo: float, maximo: float, paso: float) -> list[float]:
     return [float(v) for v in valores if v > -100]
 
 
+# Problema de transporte con el parámetro elegido variado en el porcentaje indicado.
 def problema_variado(datos: DatosModelo, tipo: str, indice: int | None, variacion_pct: float) -> ProblemaTransporte:
-    """Problema de transporte con el parámetro elegido multiplicado por (1 + variación %)."""
+    # El parámetro elegido se multiplica por (1 + variación %).
     factor = 1 + variacion_pct / 100
     oferta, demanda = datos.oferta.astype(float).copy(), datos.demanda.astype(float).copy()
     operacion, alfa = datos.costos_operacion.astype(float).copy(), datos.alfa
@@ -74,14 +74,11 @@ def problema_variado(datos: DatosModelo, tipo: str, indice: int | None, variacio
     return ProblemaTransporte(oferta, demanda, costos, datos.habilitadas.copy())
 
 
+# Resuelve el método exacto, y opcionalmente el AG, en cada punto de la variación.
 def simular(datos: DatosModelo, tipo: str, indice: int | None, valores: list[float],
             parametros_ag: ParametrosAG | None = None,
             al_avanzar: Callable[[int, int], None] | None = None) -> list[PuntoSimulacion]:
-    """Resuelve el método exacto (y opcionalmente el AG) en cada punto de la variación.
-
-    `cambia_plan` indica si el conjunto de rutas usadas difiere del de la
-    solución sin variación: allí la solución deja de tener la misma estructura.
-    """
+    # Rutas usadas sin variación, para detectar en qué puntos cambia el plan.
     referencia = _rutas_usadas(ModeloTransporte(problema_variado(datos, tipo, indice, 0.0)).resolver())
     puntos = []
     for k, variacion in enumerate(valores, start=1):
@@ -102,6 +99,7 @@ def simular(datos: DatosModelo, tipo: str, indice: int | None, valores: list[flo
     return puntos
 
 
+# Conjunto de rutas con flujo positivo de una solución.
 def _rutas_usadas(solucion) -> frozenset | None:
     if solucion.flujos is None:
         return None

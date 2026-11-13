@@ -1,10 +1,3 @@
-"""Sesión del usuario: se guarda en session_state y se recupera tras recargar la página.
-
-Al iniciar sesión se escribe una cookie con un token firmado; en una carga nueva
-(recarga del navegador) session_state está vacío y el usuario se restaura a
-partir de esa cookie mientras no haya expirado.
-"""
-
 import streamlit as st
 
 from backend.auth import ServicioAutenticacion, UsuarioSesion
@@ -14,6 +7,7 @@ from frontend.components import session
 COOKIE_SESION = "eco_sesion"
 
 
+# Usuario de la sesión; tras una recarga se restaura desde la cookie firmada.
 def usuario_actual() -> UsuarioSesion | None:
     if "usuario" not in st.session_state and not st.session_state.get("_sesion_cerrada"):
         st.session_state.usuario = ServicioAutenticacion().validar_token(
@@ -21,10 +15,12 @@ def usuario_actual() -> UsuarioSesion | None:
     return st.session_state.get("usuario")
 
 
+# Indica si hay un usuario con sesión activa.
 def esta_autenticado() -> bool:
     return usuario_actual() is not None
 
 
+# Guarda el usuario en la sesión y programa la cookie con su token.
 def iniciar_sesion(usuario: UsuarioSesion) -> None:
     st.session_state.usuario = usuario
     st.session_state.pop("_sesion_cerrada", None)
@@ -32,6 +28,7 @@ def iniciar_sesion(usuario: UsuarioSesion) -> None:
                              Configuracion().horas_sesion * 3600)
 
 
+# Cierra la sesión, conserva el tema elegido y elimina la cookie.
 def cerrar_sesion() -> None:
     tema = st.session_state.get("tema")
     st.session_state.clear()

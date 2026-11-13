@@ -6,13 +6,14 @@ from frontend.components import session, theme_toggle
 from frontend.components.auth_guard import usuario_actual
 
 
+# Activa el escenario elegido en el selector de la barra superior.
 def _seleccionar_escenario():
     st.session_state.escenario_activo = st.session_state.cabecera_escenario
 
 
+# Barra superior: título, selector de escenario, tema y usuario.
 def mostrar(seccion: str, titulo: str, *, etiqueta_escenario: str | None = "Escenario",
             acciones: Callable[[], None] | None = None) -> None:
-    """Barra superior de cada página: título, escenario activo, tema y usuario."""
     usuario = usuario_actual()
     with st.container(key="cabecera_app"):
         izquierda, derecha = st.columns([1, 1.5], vertical_alignment="center")

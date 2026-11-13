@@ -9,7 +9,6 @@ from backend.sensitivity.ranging import rango_costo, rango_lado_derecho
 
 @dataclass(frozen=True)
 class SensibilidadNodo:
-    """Empresa (oferta) o planta (demanda)."""
     indice: int
     cantidad: float
     utilizado: float
@@ -29,6 +28,7 @@ class SensibilidadRuta:
     costo_minimo: float
     costo_maximo: float
 
+    # Indica si la ruta lleva flujo en la solución óptima.
     @property
     def usada(self) -> bool:
         return self.flujo > 1e-6
@@ -44,8 +44,8 @@ class AnalisisSensibilidad:
     oferta_igual: bool
 
 
+# Precios sombra, holguras y rangos de factibilidad y de optimalidad de la solución óptima.
 def analizar(problema: ProblemaTransporte) -> AnalisisSensibilidad | None:
-    """Precios sombra, holguras y rangos de factibilidad y optimalidad de la solución óptima."""
     base = base_optima(problema)
     if base is None:
         return None

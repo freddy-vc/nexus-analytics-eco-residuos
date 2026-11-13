@@ -1,0 +1,52 @@
+%%{init: {"theme": "base", "fontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "themeVariables": {"actorBkg": "#FFFFFF", "actorBorder": "#3F3F46", "actorTextColor": "#27272A", "actorLineColor": "#3F3F46", "signalColor": "#27272A", "signalTextColor": "#27272A", "labelBoxBkgColor": "#FFFFFF", "labelBoxBorderColor": "#3F3F46", "labelTextColor": "#27272A", "loopTextColor": "#3F3F46", "noteBkgColor": "#FFFBEB", "noteBorderColor": "#E5C07B", "noteTextColor": "#3F3F46", "activationBkgColor": "#F4F4F5", "activationBorderColor": "#A1A1AA"}, "sequence": {"messageFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "actorFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "noteFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "messageFontSize": 14, "actorFontSize": 14, "noteFontSize": 13, "mirrorActors": true, "actorMargin": 60, "messageMargin": 32, "boxMargin": 8, "noteMargin": 10, "width": 170, "height": 56, "useMaxWidth": false}, "themeCSS": ".actor-line{stroke:#3F3F46 !important;stroke-width:1.3px !important}.actor-man line,.actor-man circle{stroke:#D946EF !important;stroke-width:2px !important}.actor-man circle{fill:#FFFFFF !important}text.actor-man,text.actor tspan{fill:#27272A !important}.messageLine0,.messageLine1{stroke:#27272A !important;stroke-width:1.4px !important}.loopLine{stroke:#3F3F46 !important;stroke-dasharray:2 3 !important;stroke-width:1.2px !important}.labelBox{fill:#FFFFFF !important;stroke:#3F3F46 !important}.loopText,.loopText tspan{fill:#3F3F46 !important}rect.actor{rx:8px;ry:8px;stroke-width:1.6px !important;filter:drop-shadow(0 2px 3px rgba(0,0,0,.12))}rect.actor[name=AUT]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=BD]{fill:#E8FBFF !important;stroke:#22CCEE !important}rect.actor[name=SES]{fill:#FFF1F1 !important;stroke:#F07070 !important}rect.actor[name=US]{fill:#F3EFFF !important;stroke:#A285F0 !important}"}}%%
+%% Transversal · Inicio de sesión
+sequenceDiagram
+    actor A as Analista
+    participant AUT as ServicioAutenticacion
+    participant BD as BaseDatos
+    participant SES as Session (SQLAlchemy)
+    participant US as UsuarioSesion
+    A->>+AUT: autenticar(identificador: str, clave: str): UsuarioSesion
+    AUT->>+BD: sesion(): Iterator[Session]
+    BD-->>-AUT: Session
+    AUT->>+SES: scalar(statement: Select[tuple[Usuario]]): Usuario | None
+    SES-->>-AUT: Usuario | None
+    alt usuario no encontrado o inactivo
+        AUT-->>A: ErrorAutenticacion
+    else cuenta bloqueada (bloqueado_hasta > ahora)
+        AUT-->>A: ErrorAutenticacion
+    else usuario encontrado
+        Note over AUT: Verifica la contraseña con bcrypt.checkpw
+        alt contraseña incorrecta
+            AUT->>AUT: _duracion_bloqueo(): str
+            AUT->>+SES: commit(): None
+            SES-->>-AUT: None
+            AUT-->>A: ErrorAutenticacion
+        else contraseña correcta
+            AUT->>AUT: _a_sesion(usuario: Usuario): UsuarioSesion
+            AUT->>+US: UsuarioSesion(id: int, usuario: str, nombres: str, apellidos: str, rol: str)
+            US-->>-AUT: UsuarioSesion
+            BD->>+SES: commit(): None
+            SES-->>-BD: None
+            AUT-->>A: UsuarioSesion
+        end
+    end
+    deactivate AUT
+    A->>+AUT: emitir_token(usuario: UsuarioSesion): str
+    AUT->>AUT: _firmar(contenido: str): str
+    AUT-->>-A: str
+    A->>+US: «property» iniciales(): str
+    US-->>-A: str
+    A->>+AUT: validar_token(token: str | None): UsuarioSesion | None
+    AUT->>AUT: _firmar(contenido: str): str
+    alt firma inválida o token vencido
+        AUT-->>A: None
+    else token válido
+        AUT->>+BD: sesion(): Iterator[Session]
+        BD-->>-AUT: Session
+        AUT->>+SES: get(entity: type[Usuario], ident: int): Usuario | None
+        SES-->>-AUT: Usuario | None
+        AUT->>AUT: _a_sesion(usuario: Usuario): UsuarioSesion
+        AUT-->>A: UsuarioSesion | None
+    end
+    deactivate AUT

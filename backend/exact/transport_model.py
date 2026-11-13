@@ -14,6 +14,7 @@ class ProblemaTransporte:
     costos: np.ndarray
     habilitadas: np.ndarray
 
+    # Número de empresas y de plantas.
     @property
     def dimension(self) -> tuple[int, int]:
         return self.costos.shape
@@ -33,28 +34,22 @@ class SolucionTransporte:
     num_restricciones: int
 
 
+# Modelo de transporte de la Fase 1 resuelto con el Simplex.
 class ModeloTransporte:
-    """Modelo de transporte de la Fase 1 resuelto con el método Simplex.
-
-        min Z = Σᵢ Σⱼ cᵢⱼ xᵢⱼ
-        s.a. Σⱼ xᵢⱼ = Oᵢ   (oferta)
-             Σᵢ xᵢⱼ ≤ Dⱼ   (demanda)
-             xᵢⱼ ≥ 0
-
-    Solo se crean variables para las rutas habilitadas, de modo que el tamaño
-    del programa lineal crece con los arcos reales de la red (RNF02).
-    """
-
+    # Recibe el problema y, opcionalmente, una instancia del Simplex.
     def __init__(self, problema: ProblemaTransporte, simplex: Simplex | None = None):
         self.problema = problema
         self.simplex = simplex or Simplex()
 
+    # Balancea, arma el programa lineal, lo resuelve y devuelve los flujos por ruta.
     def resolver(self) -> SolucionTransporte:
         p = self.problema
         m, n = p.dimension
         balance = verificar_balance(p.oferta, p.demanda)
+        # Nodo ficticio de costo cero si Σ O_i ≠ Σ D_j.
         balanceado = balancear_problema(p.oferta, p.demanda, p.costos, p.habilitadas)
 
+        # Una variable x_ij por cada ruta habilitada.
         arcos = np.argwhere(balanceado.habilitadas)
         c, A_igual, b_igual, A_menor, b_menor = self._programa_lineal(balanceado, arcos)
 
@@ -70,8 +65,10 @@ class ModeloTransporte:
             return solucion
 
         completo = np.zeros(balanceado.costos.shape)
+        # Reconstruye la matriz de flujos y separa el nodo ficticio.
         completo[arcos[:, 0], arcos[:, 1]] = resultado.x
         solucion.flujos = completo[:m, :n]
+        # Z = Σ_i Σ_j c_ij · x_ij con los costos originales.
         solucion.objetivo = float(np.sum(solucion.flujos * np.nan_to_num(p.costos)))
         if balanceado.destino_ficticio:
             solucion.sin_enviar = completo[:m, n]
@@ -79,6 +76,7 @@ class ModeloTransporte:
             solucion.capacidad_ociosa = completo[m, :n]
         return solucion
 
+    # Construye costos y restricciones de oferta y demanda sobre las rutas habilitadas.
     @staticmethod
     def _programa_lineal(balanceado, arcos):
         num_arcos = len(arcos)
@@ -86,8 +84,10 @@ class ModeloTransporte:
         indice = np.arange(num_arcos)
 
         A_igual = np.zeros((len(balanceado.oferta), num_arcos))
+        # Oferta: Σ_j x_ij = O_i, una fila por empresa.
         A_igual[filas, indice] = 1.0
         A_menor = np.zeros((len(balanceado.demanda), num_arcos))
+        # Demanda: Σ_i x_ij ≤ D_j, una fila por planta.
         A_menor[columnas, indice] = 1.0
         c = balanceado.costos[filas, columnas]
         return c, A_igual, balanceado.oferta, A_menor, balanceado.demanda

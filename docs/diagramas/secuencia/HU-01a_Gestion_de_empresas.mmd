@@ -1,0 +1,96 @@
+%%{init: {"theme": "base", "fontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "themeVariables": {"actorBkg": "#FFFFFF", "actorBorder": "#3F3F46", "actorTextColor": "#27272A", "actorLineColor": "#3F3F46", "signalColor": "#27272A", "signalTextColor": "#27272A", "labelBoxBkgColor": "#FFFFFF", "labelBoxBorderColor": "#3F3F46", "labelTextColor": "#27272A", "loopTextColor": "#3F3F46", "noteBkgColor": "#FFFBEB", "noteBorderColor": "#E5C07B", "noteTextColor": "#3F3F46", "activationBkgColor": "#F4F4F5", "activationBorderColor": "#A1A1AA"}, "sequence": {"messageFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "actorFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "noteFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "messageFontSize": 14, "actorFontSize": 14, "noteFontSize": 13, "mirrorActors": true, "actorMargin": 60, "messageMargin": 32, "boxMargin": 8, "noteMargin": 10, "width": 170, "height": 56, "useMaxWidth": false}, "themeCSS": ".actor-line{stroke:#3F3F46 !important;stroke-width:1.3px !important}.actor-man line,.actor-man circle{stroke:#D946EF !important;stroke-width:2px !important}.actor-man circle{fill:#FFFFFF !important}text.actor-man,text.actor tspan{fill:#27272A !important}.messageLine0,.messageLine1{stroke:#27272A !important;stroke-width:1.4px !important}.loopLine{stroke:#3F3F46 !important;stroke-dasharray:2 3 !important;stroke-width:1.2px !important}.labelBox{fill:#FFFFFF !important;stroke:#3F3F46 !important}.loopText,.loopText tspan{fill:#3F3F46 !important}rect.actor{rx:8px;ry:8px;stroke-width:1.6px !important;filter:drop-shadow(0 2px 3px rgba(0,0,0,.12))}rect.actor[name=ESC]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=RED]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=BD]{fill:#E8FBFF !important;stroke:#22CCEE !important}rect.actor[name=SES]{fill:#FFF1F1 !important;stroke:#F07070 !important}rect.actor[name=DE]{fill:#F3EFFF !important;stroke:#A285F0 !important}"}}%%
+%% HU-01 · Gestión de empresas agropecuarias
+sequenceDiagram
+    actor A as Analista
+    participant ESC as ServicioEscenarios
+    participant RED as ServicioRed
+    participant BD as BaseDatos
+    participant SES as Session (SQLAlchemy)
+    participant DE as escenario: DatosEscenario
+    A->>+ESC: cargar(escenario_id: int): DatosEscenario
+    ESC-->>-A: DatosEscenario
+
+    A->>+RED: municipios(): list[ElementoCatalogo]
+    RED->>+BD: sesion(): Iterator[Session]
+    BD-->>-RED: Session
+    RED->>+SES: scalars(statement: Select[tuple[Municipio]]): ScalarResult[Municipio]
+    SES-->>-RED: ScalarResult[Municipio]
+    RED-->>-A: list[ElementoCatalogo]
+    A->>+RED: tipos_residuo(): list[ElementoCatalogo]
+    RED->>+BD: sesion(): Iterator[Session]
+    BD-->>-RED: Session
+    RED->>+SES: scalars(statement: Select[tuple[TipoResiduo]]): ScalarResult[TipoResiduo]
+    SES-->>-RED: ScalarResult[TipoResiduo]
+    RED-->>-A: list[ElementoCatalogo]
+    A->>+DE: «property» oferta(): np.ndarray
+    DE-->>-A: np.ndarray
+    alt crear empresa
+        A->>+RED: siguiente_codigo(prefijo: str): str
+        RED->>+SES: scalars(statement: Select[tuple[str]]): ScalarResult[str]
+        SES-->>-RED: ScalarResult[str]
+        RED-->>-A: str
+        A->>+RED: crear_empresa(escenario_id: int, datos: DatosEmpresa): None
+        RED->>RED: _limpiar_empresa(datos: DatosEmpresa): DatosEmpresa
+        RED->>+BD: sesion(): Iterator[Session]
+        BD-->>-RED: Session
+        RED->>RED: _escenario(sesion: Session, escenario_id: int): Escenario
+        RED->>+SES: get(entity: type[Escenario], ident: int): Escenario | None
+        SES-->>-RED: Escenario | None
+        RED->>RED: _validar_empresa_unica(sesion: Session, datos: DatosEmpresa,<br/>excluir_id: int | None): None
+        RED->>+SES: scalar(statement: Select[tuple[Empresa]]): Empresa | None
+        SES-->>-RED: Empresa | None
+        alt dato vacío o negativo, código o NIT repetido, escenario inexistente
+            RED-->>A: ErrorValidacion | ErrorNoEncontrado
+        else datos válidos
+            loop por cada planta del escenario
+                RED->>+SES: add(instance: Ruta): None
+                SES-->>-RED: None
+            end
+            BD->>+SES: commit(): None
+            SES-->>-BD: None
+            RED-->>A: None
+        end
+        deactivate RED
+    else editar empresa
+        A->>+RED: actualizar_empresa(empresa_id: int, id_vinculo: int,<br/>datos: DatosEmpresa): None
+        RED->>RED: _limpiar_empresa(datos: DatosEmpresa): DatosEmpresa
+        RED->>+BD: sesion(): Iterator[Session]
+        BD-->>-RED: Session
+        RED->>+SES: get(entity: type[Empresa], ident: int): Empresa | None
+        SES-->>-RED: Empresa | None
+        RED->>+SES: get(entity: type[EscenarioEmpresa], ident: int): EscenarioEmpresa | None
+        SES-->>-RED: EscenarioEmpresa | None
+        alt la empresa ya no existe
+            RED-->>A: ErrorNoEncontrado
+        else existe
+            RED->>RED: _validar_empresa_unica(sesion: Session, datos: DatosEmpresa,<br/>excluir_id: int | None): None
+            alt código o NIT repetido
+                RED-->>A: ErrorValidacion
+            else únicos
+                BD->>+SES: commit(): None
+                SES-->>-BD: None
+                RED-->>A: None
+            end
+        end
+        deactivate RED
+    else eliminar empresa
+        A->>+RED: eliminar_empresa(empresa_id: int): None
+        RED->>+BD: sesion(): Iterator[Session]
+        BD-->>-RED: Session
+        RED->>+SES: get(entity: type[Empresa], ident: int): Empresa | None
+        SES-->>-RED: Empresa | None
+        alt la empresa ya no existe
+            RED-->>A: ErrorNoEncontrado
+        else existe
+            RED->>+SES: execute(statement: Delete): Result
+            SES-->>-RED: Result
+            RED->>+SES: execute(statement: Delete): Result
+            SES-->>-RED: Result
+            RED->>+SES: delete(instance: Empresa): None
+            SES-->>-RED: None
+            BD->>+SES: commit(): None
+            SES-->>-BD: None
+            RED-->>A: None
+        end
+        deactivate RED
+    end

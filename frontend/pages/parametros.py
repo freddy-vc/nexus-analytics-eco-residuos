@@ -17,6 +17,7 @@ verificaciones = validar_datos(escenario.oferta, escenario.demanda, escenario.di
                                escenario.habilitadas)
 
 
+# Guarda los parámetros del escenario capturados en el formulario.
 def guardar():
     estado = st.session_state
     try:
@@ -32,6 +33,7 @@ def guardar():
     session.avisar("Escenario guardado.")
 
 
+# Muestra el resultado de las verificaciones del problema.
 def validar():
     pendientes = [v.titulo for v in verificaciones if not v.cumple]
     if pendientes:
@@ -40,6 +42,7 @@ def validar():
         session.avisar("Los datos del escenario son válidos.")
 
 
+# Botones para validar los datos y guardar el escenario.
 def acciones():
     with st.container(key="barra_validar"):
         st.button("Validar datos", on_click=validar)
@@ -47,15 +50,15 @@ def acciones():
         st.button("Guardar escenario", type="primary", on_click=guardar)
 
 
+# Recalcula el factor sobre el costo base al editar el costo de transporte.
 def costo_cambiado():
-    """Al escribir el costo de transporte se recalcula el factor sobre el costo base."""
     costo = st.session_state[CLAVE_COSTO] or 0.0
     if costo > 0:
         st.session_state[CLAVE_FACTOR] = factor_desde_costo(costo, escenario.alfa)
 
 
+# Recalcula el costo de transporte al editar el factor.
 def factor_cambiado():
-    """Al cambiar el factor se recalcula el costo de transporte."""
     factor = st.session_state[CLAVE_FACTOR] or 0.0
     st.session_state[CLAVE_COSTO] = round(alfa_efectivo(escenario.alfa, factor), 2)
 
@@ -63,6 +66,7 @@ def factor_cambiado():
 PROPORCION = [1.05, 0.95, 1.2]
 
 
+# Campo numérico con su etiqueta.
 def campo_numero(etiqueta: str, clave: str, valor: float, paso: float, caja: str) -> None:
     with st.container(key=caja):
         st.number_input(etiqueta, min_value=0.0, step=paso, format="%g", value=valor, key=clave,
@@ -108,8 +112,8 @@ lateral.html(
     f'<strong style="color:{color}">{fmt.toneladas(abs(balance.diferencia))}</strong></div></div></div>')
 
 
+# Título de la tarjeta y encabezado de columnas con su unidad.
 def cabecera_tabla(titulo: str, columnas: tuple[tuple[str, str], ...]) -> list:
-    """Título de la tarjeta y encabezado de cada columna con su unidad debajo."""
     st.html(f'<h2 class="tarjeta-titulo">{titulo}</h2>')
     celdas = st.columns(PROPORCION, vertical_alignment="bottom")
     for celda, (texto, unidad) in zip(celdas[1:], columnas):

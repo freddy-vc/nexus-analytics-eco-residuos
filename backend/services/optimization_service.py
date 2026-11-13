@@ -44,13 +44,14 @@ class EjecucionExacta:
     num_variables: int
     num_restricciones: int
 
+    # Indica si la ejecución terminó en el óptimo.
     @property
     def es_optima(self) -> bool:
         return self.estado == "OPTIMO"
 
+    # Costo total del plan; el costo unitario ya incluye la compra.
     @property
     def costo_total(self) -> float | None:
-        """El costo unitario ya incluye la compra, así que Z es el costo total."""
         return self.objetivo
 
 
@@ -65,12 +66,12 @@ class ResumenEjecucion:
 
 
 class ServicioOptimizacion(metaclass=MetaSingleton):
-    """Ejecuta el modelo exacto, guarda la ejecución y recupera sus resultados."""
-
+    # Obtiene las instancias únicas de la base de datos y de la configuración.
     def __init__(self):
         self._bd = BaseDatos()
         self._tolerancia = Configuracion().tolerancia_factibilidad
 
+    # Resuelve el escenario con el método exacto, analiza la sensibilidad y guarda la ejecución.
     def resolver_exacto(self, escenario: DatosEscenario) -> EjecucionExacta:
         if not escenario.empresas or not escenario.plantas:
             raise ErrorValidacion("El escenario necesita al menos una empresa y una planta.")
@@ -99,10 +100,10 @@ class ServicioOptimizacion(metaclass=MetaSingleton):
 
         return self.ultima_exacta(escenario, ejecucion_id)
 
+    # Guarda los flujos por ruta y, si existe, el análisis de sensibilidad.
     @staticmethod
     def _guardar_resultados(sesion, ejecucion_id: int, escenario: DatosEscenario, flujos: np.ndarray,
                             analisis: AnalisisSensibilidad | None) -> None:
-        """Flujos por ruta y, si hay análisis, costos reducidos, rangos y precios sombra."""
         mascara = escenario.habilitadas
         rutas = analisis.rutas if analisis else [None] * int(mascara.sum())
         sesion.add_all(
@@ -124,6 +125,7 @@ class ServicioOptimizacion(metaclass=MetaSingleton):
                                 demanda_min=_decimal(nodo.minimo), demanda_max=_decimal(nodo.maximo))
             for planta, nodo in zip(escenario.plantas, analisis.plantas))
 
+    # Última ejecución exacta del escenario, o la indicada por su identificador.
     def ultima_exacta(self, escenario: DatosEscenario,
                       ejecucion_id: int | None = None) -> EjecucionExacta | None:
         with self._bd.sesion() as sesion:
@@ -140,8 +142,8 @@ class ServicioOptimizacion(metaclass=MetaSingleton):
                 return None
             return self._a_ejecucion(ejecucion, escenario)
 
+    # Últimas ejecuciones; cada lote del AG se representa por su mejor corrida.
     def ejecuciones_recientes(self, limite: int = 4) -> list[ResumenEjecucion]:
-        """Últimas ejecuciones; las corridas de un mismo lote del AG se muestran como una sola (la mejor)."""
         with self._bd.sesion() as sesion:
             candidatas = sesion.scalars(
                 select(Ejecucion)
@@ -164,6 +166,7 @@ class ServicioOptimizacion(metaclass=MetaSingleton):
                 milisegundos=float(e.tiempo_ms) if e.tiempo_ms is not None else None,
                 ejecutada_en=e.iniciada_en) for e in filas]
 
+    # Reconstruye la ejecución guardada con sus flujos, factibilidad y desglose de costo.
     def _a_ejecucion(self, ejecucion: Ejecucion, escenario: DatosEscenario) -> EjecucionExacta:
         balance = verificar_balance(escenario.oferta, escenario.demanda)
         flujos = desglose = factibilidad = None
@@ -188,12 +191,14 @@ class ServicioOptimizacion(metaclass=MetaSingleton):
             num_variables=int(escenario.habilitadas.sum()),
             num_restricciones=len(escenario.empresas) + len(escenario.plantas))
 
+    # Nombre del método con el escenario cuando no es el caso base.
     @staticmethod
     def _etiqueta(metodo: str, escenario) -> str:
         if escenario.es_base:
             return "Exacto" if metodo == METODO_EXACTO else "Algoritmo genético"
         return f"{'Exacto' if metodo == METODO_EXACTO else 'AG'} · {escenario.nombre}"
 
+    # Mensaje sobre el nodo ficticio agregado al balancear.
     @staticmethod
     def _mensaje_balance(balance: EstadoBalance, escenario: DatosEscenario) -> str:
         if balance.tipo is TipoBalance.EXCESO_OFERTA:
@@ -204,6 +209,7 @@ class ServicioOptimizacion(metaclass=MetaSingleton):
                     f"se agregó la empresa ficticia E{len(escenario.empresas) + 1}.")
         return "Problema balanceado: no se requieren nodos ficticios."
 
+    # Identificador de un valor de catálogo por su nombre.
     @staticmethod
     def _id_catalogo(sesion, modelo, nombre: str) -> int:
         id_catalogo = sesion.scalar(select(modelo.id).where(modelo.nombre == nombre))
@@ -212,11 +218,12 @@ class ServicioOptimizacion(metaclass=MetaSingleton):
         return id_catalogo
 
 
+# Redondea a dos decimales; los valores infinitos se guardan como NULL.
 def _decimal(valor: float) -> float | None:
-    """Los rangos infinitos se guardan como NULL (sin límite)."""
     return round(float(valor), 2) if np.isfinite(valor) else None
 
 
+# Compara dos ejecuciones: prima la factibilidad y luego el menor costo.
 def _mejor_que(a: Ejecucion, b: Ejecucion) -> bool:
     factible_a, factible_b = a.estado.nombre in ("OPTIMO", "FACTIBLE"), b.estado.nombre in ("OPTIMO", "FACTIBLE")
     if factible_a != factible_b:

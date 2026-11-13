@@ -24,10 +24,10 @@ class ResumenGrafo:
     arcos_con_flujo: int
 
 
+# Grafo bipartito dirigido de empresas a plantas con distancia, costo y flujo por arco.
 def construir_red(origenes: list[NodoRed], destinos: list[NodoRed], distancias: np.ndarray,
                   costos: np.ndarray, habilitadas: np.ndarray,
                   flujos: np.ndarray | None = None) -> nx.DiGraph:
-    """Grafo bipartito dirigido G = (V, A) con V = V_O ∪ V_D y A ⊆ V_O × V_D."""
     grafo = nx.DiGraph()
     for nodo in origenes:
         grafo.add_node(nodo.codigo, bipartito=0, etiqueta=nodo.etiqueta, oferta=nodo.cantidad,
@@ -49,14 +49,12 @@ def construir_red(origenes: list[NodoRed], destinos: list[NodoRed], distancias: 
 KM_POR_GRADO = 111.32
 
 
+# Proyecta las coordenadas geográficas al cuadrado unitario y calcula la escala en kilómetros.
 def _proyeccion(grafo: nx.DiGraph):
-    """Proyección equirectangular de longitud/latitud al cuadrado [0, 1].
-
-    Devuelve las coordenadas normalizadas y los kilómetros que mide una unidad.
-    """
     nodos = list(grafo.nodes)
     lon = np.array([grafo.nodes[n]["longitud"] for n in nodos], float)
     lat = np.array([grafo.nodes[n]["latitud"] for n in nodos], float)
+    # Proyección equirectangular: la longitud se corrige por el coseno de la latitud media.
     x = (lon - lon.min()) * math.cos(math.radians(float(lat.mean())))
     y = lat.max() - lat
     escala = max(x.max(), y.max()) or 0.1
@@ -66,17 +64,13 @@ def _proyeccion(grafo: nx.DiGraph):
     return nodos, x, y, escala * KM_POR_GRADO
 
 
+# Kilómetros que representa una unidad del dibujo.
 def kilometros_por_unidad(grafo: nx.DiGraph) -> float:
     return _proyeccion(grafo)[3] if grafo.number_of_nodes() else 0.0
 
 
+# Posición inicial de cada nodo según la ubicación de su municipio.
 def posiciones_geograficas(grafo: nx.DiGraph, radio_grupo: float = 0.07) -> dict[str, tuple[float, float]]:
-    """Ubica cada nodo según las coordenadas de su municipio, conservando la proporción del mapa.
-
-    Los nodos que comparten municipio se reparten en un círculo alrededor de él
-    para que no queden superpuestos; el resto del acomodo lo hace la simulación
-    interactiva del cliente.
-    """
     if grafo.number_of_nodes() == 0:
         return {}
     nodos, x, y, _ = _proyeccion(grafo)
@@ -91,12 +85,14 @@ def posiciones_geograficas(grafo: nx.DiGraph, radio_grupo: float = 0.07) -> dict
             if len(indices) == 1:
                 posiciones[nodos[k]] = (float(x[k]), float(y[k]))
                 continue
+            # Los nodos de un mismo municipio se reparten en un círculo para no superponerse.
             angulo = 2 * math.pi * orden / len(indices) - math.pi / 2
             posiciones[nodos[k]] = (float(x[k] + radio_grupo * math.cos(angulo)),
                                     float(y[k] + radio_grupo * math.sin(angulo)))
     return posiciones
 
 
+# Conteo de orígenes, destinos, arcos y arcos con flujo.
 def resumir(grafo: nx.DiGraph) -> ResumenGrafo:
     origenes = sum(1 for _, d in grafo.nodes(data=True) if d["bipartito"] == 0)
     con_flujo = sum(1 for *_, d in grafo.edges(data=True) if d["flujo"] > 1e-9)

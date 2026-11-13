@@ -18,6 +18,7 @@ municipios = {m.id: m.nombre for m in servicio.municipios()}
 ids_municipio = list(municipios)
 
 
+# Campos del formulario de planta; devuelve los datos capturados.
 def campos_planta(prefijo: str, fila: FilaPlanta | None, codigo: str) -> DatosPlanta:
     celdas = st.columns(2)
     codigo = celdas[0].text_input("Código", value=codigo, key=f"{prefijo}_codigo")
@@ -32,6 +33,7 @@ def campos_planta(prefijo: str, fila: FilaPlanta | None, codigo: str) -> DatosPl
     return DatosPlanta(codigo, municipio, demanda, costo)
 
 
+# Crea la planta y avisa el resultado.
 def crear(datos: DatosPlanta) -> bool:
     try:
         servicio.crear_planta(escenario.id, datos)
@@ -42,6 +44,7 @@ def crear(datos: DatosPlanta) -> bool:
     return True
 
 
+# Diálogo para crear una planta.
 @st.dialog("Nueva planta")
 def dialogo_crear():
     datos = campos_planta("dialogo_nueva", None, servicio.siguiente_codigo("P"))
@@ -51,6 +54,7 @@ def dialogo_crear():
         st.rerun()
 
 
+# Diálogo para editar una planta.
 @st.dialog("Editar planta")
 def dialogo_editar(fila: FilaPlanta):
     datos = campos_planta(f"editar{fila.planta_id}", fila, fila.codigo)
@@ -64,6 +68,7 @@ def dialogo_editar(fila: FilaPlanta):
         st.rerun()
 
 
+# Diálogo de confirmación para eliminar una planta.
 @st.dialog("Eliminar planta")
 def dialogo_eliminar(fila: FilaPlanta):
     st.html(f'<p style="font-size:14px">¿Eliminar la planta <strong>{fila.codigo} · {fila.municipio}</strong>? '

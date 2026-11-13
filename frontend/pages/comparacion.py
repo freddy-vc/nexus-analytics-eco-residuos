@@ -111,6 +111,7 @@ with escala.container(key="tarjeta_escalabilidad"):
                 'con ambos métodos y comparar cómo crece el tiempo.</p>')
 
 
+# Arma el reporte comparativo con las secciones elegidas.
 def construir_reporte(secciones: list[str]) -> Reporte:
     contenido = []
     if "Resultados de optimización" in secciones:
@@ -134,6 +135,7 @@ def construir_reporte(secciones: list[str]) -> Reporte:
         analisis = ServicioSensibilidad().analizar(escenario)
         s = Seccion("Análisis de sensibilidad")
         if analisis:
+            # Texto de un rango con límite superior opcional.
             def rango(a, b):
                 return f"{fmt.cantidad(round(a, 2))} a {'sin límite' if math.isinf(b) else fmt.cantidad(round(b, 2))}"
             s.parrafos.append("Precio sombra: cambio en el costo semanal por 1 t más de capacidad o de oferta. Rango de "
@@ -175,6 +177,7 @@ def construir_reporte(secciones: list[str]) -> Reporte:
     return Reporte("Reporte de optimización", f"Escenario {escenario.nombre}", datetime.now(), contenido)
 
 
+# Registra la comparación entre la última ejecución exacta y el último lote del AG.
 def registrar_comparacion():
     if exacta and lote:
         ServicioComparacion().registrar(exacta.ejecucion_id, lote.mejor.ejecucion_id,

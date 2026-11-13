@@ -1,5 +1,3 @@
-"""Contenido del reporte comparativo, independiente del formato de salida."""
-
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -8,7 +6,8 @@ from datetime import datetime
 class Tabla:
     columnas: list[str]
     filas: list[list[str]]
-    alineacion: list[str] | None = None   # "i" izquierda o "d" derecha por columna
+    # Alineación por columna: «i» izquierda o «d» derecha.
+    alineacion: list[str] | None = None
 
 
 @dataclass

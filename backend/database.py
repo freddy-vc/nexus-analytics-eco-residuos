@@ -13,14 +13,15 @@ from backend.config import Configuracion
 from backend.utils.singleton import MetaSingleton
 
 
+# Punto único de acceso a la base de datos.
 class BaseDatos(metaclass=MetaSingleton):
-    """Punto único de acceso a PostgreSQL: motor de conexiones y fábrica de sesiones."""
-
+    # Crea el motor de conexiones y la fábrica de sesiones.
     def __init__(self):
         self._motor = create_engine(Configuracion().url_bd, pool_pre_ping=True,
                                      pool_size=5, max_overflow=5)
         self._fabrica_sesiones = sessionmaker(bind=self._motor, expire_on_commit=False)
 
+    # Sesión transaccional: confirma al terminar o revierte ante un error.
     @contextmanager
     def sesion(self) -> Iterator[Session]:
         sesion = self._fabrica_sesiones()
@@ -38,12 +39,13 @@ class ModeloBase(DeclarativeBase):
     type_annotation_map = {datetime: DateTime(timezone=True)}
 
 
+# Columna con la fecha y hora asignadas por el servidor al insertar.
 def _fecha_actual():
     return mapped_column(nullable=False, server_default=func.now())
 
 
-# ---------------------------------------------------------------- Seguridad
 
+# Seguridad
 class Rol(ModeloBase):
     __tablename__ = "rol"
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
@@ -70,8 +72,8 @@ class Usuario(ModeloBase):
     rol: Mapped[Rol] = relationship()
 
 
-# ---------------------------------------------------------- Datos maestros
 
+# Datos maestros
 class Departamento(ModeloBase):
     __tablename__ = "departamento"
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
@@ -126,8 +128,8 @@ class Planta(ModeloBase):
     municipio: Mapped[Municipio] = relationship()
 
 
-# ------------------------------------------------------------- Escenarios
 
+# Escenarios y parámetros del modelo
 class Escenario(ModeloBase):
     __tablename__ = "escenario"
     __table_args__ = (UniqueConstraint("usuario_id", "nombre"),
@@ -202,8 +204,8 @@ class Ruta(ModeloBase):
     escenario_planta: Mapped[EscenarioPlanta] = relationship(back_populates="rutas")
 
 
-# --------------------------------------------------------------- Catálogos
 
+# Catálogos
 class MetodoSolucion(ModeloBase):
     __tablename__ = "metodo_solucion"
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
@@ -236,8 +238,8 @@ class TipoParametro(ModeloBase):
     descripcion: Mapped[Optional[str]] = mapped_column(String(150))
 
 
-# --------------------------------------------------- Ejecuciones y resultados
 
+# Ejecuciones y resultados
 class Ejecucion(ModeloBase):
     __tablename__ = "ejecucion"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -273,8 +275,8 @@ class ResultadoRuta(ModeloBase):
     ruta: Mapped[Ruta] = relationship()
 
 
-# ------------------------------------------------- Análisis de sensibilidad
 
+# Análisis de sensibilidad
 class SensibilidadOferta(ModeloBase):
     __tablename__ = "sensibilidad_oferta"
     __table_args__ = (UniqueConstraint("ejecucion_id", "escenario_empresa_id"),)
@@ -327,8 +329,8 @@ class PuntoSensibilidad(ModeloBase):
     variacion_pct: Mapped[Decimal] = mapped_column(Numeric(6, 2))
 
 
-# ------------------------------------------------------ Algoritmo genético
 
+# Algoritmo genético
 class ParametrosAG(ModeloBase):
     __tablename__ = "parametros_ag"
     __table_args__ = (CheckConstraint("tasa_cruce BETWEEN 0 AND 1"),
@@ -360,8 +362,8 @@ class HistorialGeneracion(ModeloBase):
     violaciones: Mapped[int] = mapped_column(Integer, server_default="0")
 
 
-# ---------------------------------------------------------------- Comparación
 
+# Comparación
 class Comparacion(ModeloBase):
     __tablename__ = "comparacion"
     __table_args__ = (UniqueConstraint("ejecucion_exacta_id", "ejecucion_ag_id"),

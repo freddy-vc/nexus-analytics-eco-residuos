@@ -4,27 +4,24 @@ TORNEO = "TORNEO"
 RULETA = "RULETA"
 
 
+# Índices de los padres según el método de selección configurado.
 def seleccionar(aptitud: np.ndarray, cantidad: int, metodo: str, tamano_torneo: int,
                 rng: np.random.Generator) -> np.ndarray:
-    """Índices de los padres elegidos."""
     if metodo == TORNEO:
         return torneo(aptitud, cantidad, tamano_torneo, rng)
     return ruleta(aptitud, cantidad, rng)
 
 
+# Selección por torneo: cada padre es el más apto de un grupo tomado al azar.
 def torneo(aptitud: np.ndarray, cantidad: int, tamano: int, rng: np.random.Generator) -> np.ndarray:
-    """Cada padre es el más apto entre `tamano` individuos tomados al azar."""
     competidores = rng.integers(0, aptitud.size, size=(cantidad, max(tamano, 1)))
     ganadores = np.argmax(aptitud[competidores], axis=1)
     return competidores[np.arange(cantidad), ganadores]
 
 
+# Selección por ruleta con escalado por ventana.
 def ruleta(aptitud: np.ndarray, cantidad: int, rng: np.random.Generator) -> np.ndarray:
-    """Probabilidad proporcional a la aptitud por encima de la del peor individuo.
-
-    Como las aptitudes son inversos de costos muy parecidos, restar la mínima
-    (escalado por ventana) evita que la ruleta elija casi al azar.
-    """
+    # p_r = (f_r − f_min) / Σ_s (f_s − f_min)
     ajustada = aptitud - aptitud.min()
     total = ajustada.sum()
     if total <= 0:

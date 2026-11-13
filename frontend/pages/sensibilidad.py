@@ -23,20 +23,24 @@ analisis = servicio.analizar(escenario)
 empresas, plantas = escenario.empresas, escenario.plantas
 
 
+# Código y nombre corto de la empresa.
 def nombre_empresa(i: int) -> str:
     return f"{empresas[i].codigo} {fmt.nombre_corto(empresas[i].nombre)}"
 
 
+# Código y municipio de la planta.
 def nombre_planta(j: int) -> str:
     return f"{plantas[j].codigo} {plantas[j].municipio}"
 
 
+# Texto de un rango de toneladas.
 def rango_toneladas(minimo: float, maximo: float) -> str:
     if math.isinf(maximo):
         return f"Desde {fmt.cantidad(round(minimo, 2))} t (sin límite superior)"
     return f"Entre {fmt.cantidad(round(minimo, 2))} y {fmt.cantidad(round(maximo, 2))} t"
 
 
+# Texto de un rango de costo unitario.
 def rango_costo(minimo: float, maximo: float) -> str:
     if math.isinf(minimo) and math.isinf(maximo):
         return "Sin límite"
@@ -49,6 +53,7 @@ def rango_costo(minimo: float, maximo: float) -> str:
     return f"{fmt.moneda(minimo)} a {fmt.moneda(maximo)}"
 
 
+# Texto del efecto de un precio sombra sobre el costo total.
 def efecto(valor: float, mas: str, menos: str) -> str:
     if abs(valor) < 0.5:
         return '<span class="mu">No cambia el costo</span>'
@@ -57,12 +62,14 @@ def efecto(valor: float, mas: str, menos: str) -> str:
     return f'<span class="baja">{menos} {fmt.moneda(-valor)}</span>'
 
 
+# Tarjeta que explica un concepto del análisis.
 def explicacion(icono: str, titulo: str, pregunta: str, texto: str) -> str:
     return (f'<div class="concepto"><span class="mosaico-icono">{icons.icono(icono, 22)}</span>'
             f'<div><span class="concepto-nombre">{titulo}</span><strong>{pregunta}</strong>'
             f'<p>{texto}</p></div></div>')
 
 
+# Lista de conclusiones del análisis.
 def conclusiones(frases: list[str]) -> str:
     if not frases:
         return ""

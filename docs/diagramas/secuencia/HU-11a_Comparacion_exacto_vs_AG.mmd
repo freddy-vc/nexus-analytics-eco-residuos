@@ -1,0 +1,55 @@
+%%{init: {"theme": "base", "fontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "themeVariables": {"actorBkg": "#FFFFFF", "actorBorder": "#3F3F46", "actorTextColor": "#27272A", "actorLineColor": "#3F3F46", "signalColor": "#27272A", "signalTextColor": "#27272A", "labelBoxBkgColor": "#FFFFFF", "labelBoxBorderColor": "#3F3F46", "labelTextColor": "#27272A", "loopTextColor": "#3F3F46", "noteBkgColor": "#FFFBEB", "noteBorderColor": "#E5C07B", "noteTextColor": "#3F3F46", "activationBkgColor": "#F4F4F5", "activationBorderColor": "#A1A1AA"}, "sequence": {"messageFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "actorFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "noteFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "messageFontSize": 14, "actorFontSize": 14, "noteFontSize": 13, "mirrorActors": true, "actorMargin": 60, "messageMargin": 32, "boxMargin": 8, "noteMargin": 10, "width": 170, "height": 56, "useMaxWidth": false}, "themeCSS": ".actor-line{stroke:#3F3F46 !important;stroke-width:1.3px !important}.actor-man line,.actor-man circle{stroke:#D946EF !important;stroke-width:2px !important}.actor-man circle{fill:#FFFFFF !important}text.actor-man,text.actor tspan{fill:#27272A !important}.messageLine0,.messageLine1{stroke:#27272A !important;stroke-width:1.4px !important}.loopLine{stroke:#3F3F46 !important;stroke-dasharray:2 3 !important;stroke-width:1.2px !important}.labelBox{fill:#FFFFFF !important;stroke:#3F3F46 !important}.loopText,.loopText tspan{fill:#3F3F46 !important}rect.actor{rx:8px;ry:8px;stroke-width:1.6px !important;filter:drop-shadow(0 2px 3px rgba(0,0,0,.12))}rect.actor[name=ESC]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=SOP]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=GEN]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=CMP]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=BD]{fill:#E8FBFF !important;stroke:#22CCEE !important}rect.actor[name=SES]{fill:#FFF1F1 !important;stroke:#F07070 !important}rect.actor[name=FC]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=LT]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=MT]{fill:#EAFAF0 !important;stroke:#4CCF7A !important}rect.actor[name=AGA]{fill:#EAFAF0 !important;stroke:#4CCF7A !important}rect.actor[name=RAG]{fill:#F3EFFF !important;stroke:#A285F0 !important}"}}%%
+%% HU-11 · Comparación exacto vs. algoritmo genético
+sequenceDiagram
+    actor A as Analista
+    participant ESC as ServicioEscenarios
+    participant SOP as ServicioOptimizacion
+    participant GEN as ServicioGenetico
+    participant CMP as ServicioComparacion
+    participant BD as BaseDatos
+    participant SES as Session (SQLAlchemy)
+    participant FC as fila: FilaComparacion
+    participant LT as lote: LoteAG
+    participant MT as ModeloTransporte
+    participant AGA as AlgoritmoGenetico
+    participant RAG as resultado: ResultadoAG
+    A->>+ESC: cargar(escenario_id: int): DatosEscenario
+    ESC-->>-A: DatosEscenario
+
+    A->>+SOP: ultima_exacta(escenario: DatosEscenario,<br/>ejecucion_id: int | None): EjecucionExacta | None
+    SOP-->>-A: EjecucionExacta | None
+    A->>+GEN: ultimo_lote(escenario: DatosEscenario): LoteAG | None
+    GEN-->>-A: LoteAG | None
+    A->>+LT: «property» mejor(): CorridaAG
+    LT-->>-A: CorridaAG
+    A->>+CMP: por_escenarios(ids: list[int] | None): list[FilaComparacion]
+    CMP->>+BD: sesion(): Iterator[Session]
+    BD-->>-CMP: Session
+    CMP->>+SES: scalars(statement: Select[tuple[Escenario]]): ScalarResult[Escenario]
+    SES-->>-CMP: ScalarResult[Escenario]
+    CMP->>+SES: scalars(statement: Select[tuple[Ejecucion]]): ScalarResult[Ejecucion]
+    SES-->>-CMP: ScalarResult[Ejecucion]
+    loop por cada escenario
+        CMP->>+FC: FilaComparacion(escenario_id: int, escenario: str, es_base: bool,<br/>exacta_id: int | None, costo_exacto: float | None,<br/>milisegundos_exacto: float | None, ag_id: int | None, costo_ag: float | None,<br/>milisegundos_ag: float | None, corridas_ag: int)
+        FC-->>-CMP: FilaComparacion
+    end
+    CMP-->>-A: list[FilaComparacion]
+    loop por cada fila
+        A->>+FC: «property» gap(): float | None
+        FC-->>-A: float | None
+    end
+    opt medir escalabilidad (10 × 4, 50 × 10 y 100 × 20)
+        Note over A,RAG: metrics.medir_escalabilidad(tamanos, parametros, semilla) con instancias aleatorias
+        loop por cada tamaño
+            A->>+MT: ModeloTransporte(problema: ProblemaTransporte, simplex: Simplex | None)
+            MT-->>-A: ModeloTransporte
+            A->>+MT: resolver(): SolucionTransporte
+            MT-->>-A: SolucionTransporte
+            A->>+AGA: AlgoritmoGenetico(problema: ProblemaTransporte, parametros: ParametrosAG)
+            AGA-->>-A: AlgoritmoGenetico
+            A->>+AGA: ejecutar(al_avanzar: Callable[[int, int], None] | None): ResultadoAG
+            AGA-->>-A: ResultadoAG
+            A->>+RAG: «property» es_factible(): bool
+            RAG-->>-A: bool
+        end
+    end

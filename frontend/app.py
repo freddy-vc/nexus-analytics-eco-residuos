@@ -26,6 +26,7 @@ except OperationalError:
     st.stop()
 
 
+# Página de la aplicación con su título y su ruta.
 def pagina(archivo: str, titulo: str, ruta: str, inicial: bool = False) -> st.Page:
     return st.Page(f"pages/{archivo}.py", title=titulo, url_path=ruta, default=inicial)
 
@@ -55,8 +56,7 @@ PAGINAS = [e.pagina for entradas in SECCIONES.values() for e in entradas if not 
 session.escribir_cookies()
 
 if not esta_autenticado():
-    # Cada ruta muestra el inicio de sesión, así una recarga con la sesión vencida
-    # no termina en «Page not found».
+    # Toda ruta muestra el inicio de sesión para que una recarga con la sesión vencida no dé error.
     acceso = [st.Page(login_form.mostrar, title="Iniciar sesión", url_path="acceso", default=True)]
     acceso += [st.Page(login_form.mostrar, title="Iniciar sesión", url_path=p.url_path)
                for p in PAGINAS if p.url_path]

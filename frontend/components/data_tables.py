@@ -1,10 +1,11 @@
-"""Tablas HTML con el estilo de la aplicación."""
+# Columna: título y alineación, «i» izquierda o «d» derecha.
+Columna = tuple[str, str]
 
-Columna = tuple[str, str]  # (título, alineación: "i" izquierda | "d" derecha)
 
-
+# Tabla HTML con el estilo de la aplicación y fila de totales opcional.
 def tabla(columnas: list[Columna], filas: list[list[str]], pie: list[str] | None = None,
           clase: str = "", ancho_minimo: int = 420) -> str:
+    # Celda con alineación numérica a la derecha cuando corresponde.
     def celda(etiqueta: str, valor: str, alineacion: str) -> str:
         return f'<{etiqueta} class="{"num" if alineacion == "d" else ""}">{valor}</{etiqueta}>'
 

@@ -1,9 +1,3 @@
-"""Íconos de línea de la interfaz (trazos de 24 × 24, los mismos de los mockups).
-
-st.html elimina las etiquetas <svg>, por eso los íconos se pintan como máscaras
-CSS: toman el color del texto que los rodea y respetan el tema activo.
-"""
-
 from urllib.parse import quote
 
 TRAZOS = {
@@ -39,6 +33,7 @@ TRAZOS = {
 _GROSOR_GRUESO = {"visto": 3.0, "alerta": 2.2}
 
 
+# Ícono como máscara CSS; st.html elimina las etiquetas svg y así hereda el color del texto.
 def url_mascara(nombre: str, grosor: float | None = None) -> str:
     grosor = grosor or _GROSOR_GRUESO.get(nombre, 1.8)
     marcado = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
@@ -47,18 +42,12 @@ def url_mascara(nombre: str, grosor: float | None = None) -> str:
     return f'url("data:image/svg+xml;utf8,{quote(marcado)}")'
 
 
+# Elemento HTML que muestra un ícono.
 def icono(nombre: str, tamano: int = 18) -> str:
     return (f'<span class="ico ico-{nombre}" style="width:{tamano}px;height:{tamano}px" '
             f'aria-hidden="true"></span>')
 
 
+# Reglas CSS con la máscara de cada ícono.
 def css_iconos() -> str:
     return "".join(f".ico-{nombre}{{--icono:{url_mascara(nombre)};}}\n" for nombre in TRAZOS)
-
-
-def svg_datos(nombre: str, color: str, tamano: int = 24, grosor: float = 1.8) -> str:
-    """Ícono como imagen en línea, para lugares donde no aplica la máscara CSS."""
-    marcado = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{tamano}" height="{tamano}" '
-               f'viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="{grosor}" '
-               f'stroke-linecap="round" stroke-linejoin="round"><path d="{TRAZOS[nombre]}"/></svg>')
-    return f"data:image/svg+xml;utf8,{quote(marcado)}"

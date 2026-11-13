@@ -1,12 +1,11 @@
 # Interfaz web
-streamlit>=1.50
+streamlit>=1.66
 
 # Cálculo y grafos (la optimización se implementa desde cero sobre NumPy)
 numpy>=1.26
 networkx>=3.2
 
 # Visualización
-matplotlib>=3.8
 plotly>=5.20
 
 # Base de datos
@@ -17,8 +16,6 @@ psycopg2-binary>=2.9
 bcrypt>=4.1
 python-dotenv>=1.0
 
-# Importación y exportación de archivos (CSV, XLSX, PDF)
-pandas>=2.1
-openpyxl>=3.1
+# Reporte en PDF
 fpdf2>=2.7
 

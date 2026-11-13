@@ -26,6 +26,7 @@ class ParametrosAG:
     penalizacion: float = 1_000_000.0
     semilla: int | None = 42
 
+    # Mensajes de error de los parámetros fuera de rango.
     def validar(self) -> list[str]:
         errores = []
         if self.tamano_poblacion < 2:
@@ -62,23 +63,20 @@ class ResultadoAG:
     sin_enviar: np.ndarray | None = None
     capacidad_ociosa: np.ndarray | None = None
 
+    # La solución es factible si no excede la capacidad de ninguna planta.
     @property
     def es_factible(self) -> bool:
         return self.exceso <= 1e-6
 
 
+# Algoritmo genético para el problema de transporte.
 class AlgoritmoGenetico:
-    """Algoritmo genético para el problema de transporte de la Fase 1.
-
-    Trabaja sobre el problema balanceado (con empresa o planta ficticia de costo
-    cero si hace falta), igual que el método exacto, para que ambos resuelvan
-    exactamente el mismo modelo y la comparación sea justa.
-    """
-
+    # Recibe el problema y los parámetros de la corrida.
     def __init__(self, problema: ProblemaTransporte, parametros: ParametrosAG):
         self.problema = problema
         self.parametros = parametros
 
+    # Máscara de las celdas que pertenecen al nodo ficticio.
     @staticmethod
     def _celdas_ficticias(bal, m: int, n: int) -> np.ndarray:
         ficticias = np.zeros(bal.costos.shape, bool)
@@ -86,12 +84,15 @@ class AlgoritmoGenetico:
         ficticias[:, n:] = True
         return ficticias
 
+    # Ejecuta una corrida completa del AG y devuelve la mejor solución y su historial.
     def ejecutar(self, al_avanzar: Callable[[int, int], None] | None = None) -> ResultadoAG:
         p = self.parametros
         m, n = self.problema.dimension
+        # Mismo problema balanceado que resuelve el método exacto.
         bal = balancear_problema(self.problema.oferta, self.problema.demanda,
                                  np.nan_to_num(self.problema.costos), self.problema.habilitadas)
         oferta, demanda, costos, habilitadas = bal.oferta, bal.demanda, bal.costos, bal.habilitadas
+        # Un único generador inicializado con la semilla hace reproducible la corrida.
         rng = np.random.default_rng(p.semilla)
         historial: list[Generacion] = []
 
@@ -106,19 +107,23 @@ class AlgoritmoGenetico:
 
             for generacion in range(1, p.num_generaciones + 1):
                 orden = np.argsort(-evaluacion.aptitud)
+                # Elitismo: los e mejores individuos pasan intactos.
                 elite = poblacion[orden[:p.elitismo]]
 
                 faltan = p.tamano_poblacion - p.elitismo
+                # q = ⌈(P − e) / 2⌉ parejas de padres.
                 pares = (faltan + 1) // 2
                 padres = seleccionar(evaluacion.aptitud, 2 * pares, p.seleccion, p.tamano_torneo, rng)
                 hijo_a, hijo_b = cruzar(poblacion[padres[:pares]], poblacion[padres[pares:]],
                                         p.tasa_cruce, p.cruce, rng)
                 hijos = np.concatenate([hijo_a, hijo_b])[:faltan]
                 hijos = mutar(hijos, p.tasa_mutacion, costos, demanda, habilitadas, rng)
+                # Reemplazo generacional con la oferta reparada.
                 poblacion = reparar_oferta(np.concatenate([elite, hijos]), oferta, habilitadas)
 
                 evaluacion = evaluar(poblacion, costos, demanda, p.penalizacion)
                 indice = int(np.argmax(evaluacion.aptitud))
+                # Se conserva la mejor solución de toda la corrida.
                 if evaluacion.aptitud[indice] > mejor_aptitud:
                     mejor_aptitud = float(evaluacion.aptitud[indice])
                     mejor = poblacion[indice].copy()
@@ -128,6 +133,7 @@ class AlgoritmoGenetico:
                 if al_avanzar and (generacion % 10 == 0 or generacion == p.num_generaciones):
                     al_avanzar(generacion, p.num_generaciones)
 
+        # Limpieza final de los excesos residuales de capacidad.
         mejor = reparar_capacidad(mejor, demanda, costos, habilitadas)
         final = evaluar(mejor[None], costos, demanda, p.penalizacion)
         resultado = ResultadoAG(

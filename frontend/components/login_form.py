@@ -12,12 +12,14 @@ from frontend.components.sidebar import uri_logo
 RAIZ = Path(__file__).resolve().parents[2]
 
 
+# Imagen de la portada como URI de datos.
 @st.cache_resource
 def _imagen_portada() -> str:
     datos = base64.b64encode((RAIZ / "assets/images/login.avif").read_bytes()).decode()
     return f"data:image/avif;base64,{datos}"
 
 
+# Autentica al usuario e inicia la sesión, o muestra el error correspondiente.
 def _enviar():
     try:
         usuario = ServicioAutenticacion().autenticar(st.session_state.acceso_usuario,
@@ -29,6 +31,7 @@ def _enviar():
     iniciar_sesion(usuario)
 
 
+# Pantalla de inicio de sesión.
 def mostrar() -> None:
     with st.container(key="acceso_marco"):
         portada, panel = st.columns(2, gap="small")

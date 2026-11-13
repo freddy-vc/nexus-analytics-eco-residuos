@@ -87,7 +87,7 @@ La asignación empírica de rutas genera sobrecostos operativos. El sistema dete
 | Autenticación | Inicio de sesión con usuario y contraseña (rol **analista**) | — |
 | Datos de la red | Gestión de empresas, plantas, rutas, distancias, ofertas y demandas | RF01 – RF04 |
 | Parámetros | Coeficientes del negocio: costo de transporte y su factor, precio por tonelada de cada empresa (β<sub>i</sub>), costo de operación (p<sub>j</sub>) | RF05 |
-| Importar / exportar | Carga y descarga de datos en CSV, XLSX y JSON | RF06 |
+| Datos de prueba | Caso base regional precargado con el script de la base de datos (10 empresas y 4 plantas) | RF06 |
 | Red logística | Construcción y visualización del grafo G = (V, A) | RF07 |
 | Validación | Consistencia de datos y balance oferta–demanda con nodo ficticio | RF08 |
 | Método exacto | Resolución con Simplex de dos fases, verificación de factibilidad | RF09, RF10 |
@@ -96,7 +96,7 @@ La asignación empírica de rutas genera sobrecostos operativos. El sistema dete
 | Sensibilidad | Precios sombra, costos reducidos y rangos de variación | RF15 |
 | Escenarios | Simulación de variaciones, guardado y recuperación de escenarios | RF16, RF17 |
 | Comparación | Reporte exacto vs. AG: costo, tiempo y gap % | RF18 |
-| Reportes | Exportación a PDF, CSV y XLSX | RF19 |
+| Reportes | Exportación del reporte en PDF: resultados, sensibilidad y comparación | RF19 |
 
 ## 5. Arquitectura
 
@@ -119,7 +119,7 @@ flowchart LR
         SRV --> GEN[genetic/]
         SRV --> SEN[sensitivity/]
         SRV --> CMP[comparison/]
-        SRV --> DIO[data_io/]
+        SRV --> DIO[data_io/<br/>reporte PDF]
         SRV --> AUTH[auth.py]
         SRV --> DB[database.py<br/>conexión + ORM]
     end
@@ -143,42 +143,37 @@ flowchart LR
 | Interfaz web | Streamlit | Páginas, formularios, tablas y gráficas |
 | Cálculo | NumPy | Matrices, vectores y operaciones del Simplex, el AG y la sensibilidad |
 | Grafos | NetworkX | Construcción y visualización de la red G = (V, A) |
-| Visualización | Matplotlib · Plotly | Grafo, convergencia del AG, sensibilidad y comparación |
+| Visualización | Plotly · HTML/SVG | Convergencia del AG, simulación de escenarios y grafo interactivo de la red |
 | Base de datos | PostgreSQL | Persistencia de datos, escenarios y resultados |
 | ORM | SQLAlchemy 2 | Mapeo objeto-relacional en `database.py` |
 | Seguridad | bcrypt | Hash de contraseñas |
-| Archivos | pandas · openpyxl · fpdf2 | Lectura/escritura CSV y XLSX, reportes PDF |
+| Reportes | fpdf2 | Reporte comparativo en PDF |
 
-> **Restricción de diseño:** el método Simplex, el método de transporte, el Algoritmo Genético y el análisis de sensibilidad se implementan **desde cero**. No se utilizan librerías de optimización (SciPy, PuLP, HiGHS, OR-Tools, DEAP, etc.); NumPy se usa solo como soporte de cálculo matricial. pandas se limita a la lectura y escritura de archivos.
+> **Restricción de diseño:** el método Simplex, el método de transporte, el Algoritmo Genético y el análisis de sensibilidad se implementan **desde cero**. No se utilizan librerías de optimización (SciPy, PuLP, HiGHS, OR-Tools, DEAP, etc.); NumPy se usa solo como soporte de cálculo matricial.
 
 ## 7. Estructura del proyecto
 
 ```text
 nexus-analytics-eco-residuos/
 ├── .streamlit/
-│   └── config.toml                  # Tema y configuración de Streamlit
+│   └── config.toml                  # Colores de los temas claro y oscuro y configuración de Streamlit
 ├── assets/
-│   ├── icons/                       # Iconos SVG de navegación, KPIs, acciones y tema
 │   ├── fonts/                       # Tipografía Inter (uso sin conexión, RNF12)
 │   ├── images/                      # Imágenes de la aplicación (login.avif)
 │   └── logo/                        # Logotipo (ecoresiduos.svg) e ícono de la pestaña (icon.svg)
 ├── backend/
-│   ├── __init__.py
 │   ├── config.py                    # Carga de variables de entorno y constantes globales
 │   ├── database.py                  # Conexión a PostgreSQL y modelos ORM (SQLAlchemy)
 │   ├── auth.py                      # Login: verificación de credenciales con bcrypt
 │   ├── network/                     # Fase 1 · Modelado de la red
-│   │   ├── __init__.py
 │   │   ├── graph_builder.py         # Grafo dirigido G = (V, A) con NetworkX
 │   │   ├── cost_matrix.py           # Matriz de costos c_ij = α·d_ij + p_j + β_i
 │   │   └── balance.py               # Validación de datos, balance y nodos ficticios
 │   ├── exact/                       # Fase 2 · Solución exacta
-│   │   ├── __init__.py
 │   │   ├── transport_model.py       # Formulación del PL: vector c, matriz A, vector b
 │   │   ├── simplex.py               # Método Simplex de dos fases (NumPy)
 │   │   └── solution_validator.py    # Verificación de factibilidad (tolerancia 1e-6)
 │   ├── genetic/                     # Fase 3 · Algoritmo Genético
-│   │   ├── __init__.py
 │   │   ├── chromosome.py            # Codificación cromosómica de la asignación de flujos
 │   │   ├── fitness.py               # Aptitud: inversa del costo penalizado
 │   │   ├── selection.py             # Selección por ruleta y por torneo
@@ -187,22 +182,16 @@ nexus-analytics-eco-residuos/
 │   │   ├── genetic_algorithm.py     # Motor evolutivo y curva de convergencia
 │   │   └── multi_run.py             # N corridas independientes y estadísticas
 │   ├── sensitivity/                 # Fase 4 · Análisis de sensibilidad
-│   │   ├── __init__.py
 │   │   ├── duals.py                 # Precios sombra y costos reducidos
 │   │   ├── ranging.py               # Rangos de optimalidad y de factibilidad
 │   │   ├── analysis.py              # Resumen por empresa, planta y ruta
 │   │   └── scenario_simulator.py    # Simulación de variaciones porcentuales
 │   ├── comparison/                  # Fase 4 · Comparación exacto vs. AG
-│   │   ├── __init__.py
 │   │   ├── metrics.py               # Gap %, tiempos y estadísticas
 │   │   └── comparative_report.py    # Construcción del reporte comparativo
-│   ├── data_io/                     # Importación y exportación
-│   │   ├── __init__.py
-│   │   ├── importer.py              # Carga desde CSV, XLSX y JSON
-│   │   ├── exporter.py              # Descarga de datos en CSV, XLSX y JSON
-│   │   └── report_exporter.py       # Reportes en PDF, CSV y XLSX
+│   ├── data_io/                     # Exportación de reportes
+│   │   └── report_exporter.py       # Reporte comparativo en PDF
 │   ├── services/                    # Orquestación entre interfaz, algoritmos y BD
-│   │   ├── __init__.py
 │   │   ├── network_service.py       # Empresas, plantas, rutas y catálogos
 │   │   ├── scenario_service.py      # Crear, copiar, guardar y recuperar escenarios
 │   │   ├── optimization_service.py  # Método exacto, sus resultados y su sensibilidad
@@ -210,16 +199,12 @@ nexus-analytics-eco-residuos/
 │   │   ├── sensitivity_service.py   # Análisis de sensibilidad, simulaciones y escenarios derivados
 │   │   └── comparison_service.py    # Exacto vs. AG por escenario y registro de comparaciones
 │   └── utils/
-│       ├── __init__.py
-│       ├── singleton.py             # Metaclase SingletonMeta
+│       ├── singleton.py             # Metaclase MetaSingleton
 │       ├── exceptions.py            # Excepciones del dominio (infactible, no acotado…)
-│       ├── timer.py                 # Medición de tiempos de ejecución
-│       └── logger.py                # Registro de eventos
+│       └── timer.py                 # Medición de tiempos de ejecución
 ├── frontend/
-│   ├── __init__.py
 │   ├── app.py                       # Punto de entrada: login y navegación
 │   ├── pages/
-│   │   ├── __init__.py
 │   │   ├── inicio.py                # Panel con KPIs del escenario activo
 │   │   ├── empresas.py              # Gestión de empresas (orígenes)
 │   │   ├── plantas.py               # Gestión de plantas (destinos)
@@ -232,7 +217,6 @@ nexus-analytics-eco-residuos/
 │   │   ├── sensibilidad.py          # Precios sombra, rangos y simulaciones
 │   │   └── comparacion.py           # Reporte comparativo exacto vs. AG
 │   ├── components/
-│   │   ├── __init__.py
 │   │   ├── header.py                # Barra superior: título, escenario activo, tema y usuario
 │   │   ├── session.py               # Escenario activo y avisos entre páginas
 │   │   ├── icons.py                 # Íconos de línea de la interfaz
@@ -251,8 +235,6 @@ nexus-analytics-eco-residuos/
 │       └── red_interactiva.html     # Grafo interactivo sobre el mapa (simulación de fuerzas)
 ├── database/
 │   └── ecoresiduos_db.sql           # Script DDL completo + datos del caso base
-├── data/
-│   └── samples/                     # Datos de prueba regionales (CSV, XLSX, JSON)
 ├── docs/                            # Enunciado, requerimientos, Fase 1 y MER
 ├── .env.example                     # Plantilla de variables de entorno
 ├── .gitignore
@@ -267,7 +249,7 @@ nexus-analytics-eco-residuos/
 
 | Paquete / archivo | Responsabilidad | Fase |
 |---|---|---|
-| `config.py` | Lee `.env` (conexión a la BD, entorno) y define constantes como la tolerancia numérica (1e-6). | — |
+| `config.py` | Lee `.env` (conexión a la BD y clave de sesión) y define constantes como la tolerancia numérica (1e-6). | — |
 | `database.py` | Crea el *engine* y la sesión de SQLAlchemy y declara los modelos ORM que mapean las 25 tablas del MER. El resto del sistema manipula la BD a través de estos objetos, sin escribir consultas SQL. | — |
 | `auth.py` | Valida usuario y contraseña contra `usuario.password_hash` (bcrypt). Solo login básico: sin registro ni recuperación de contraseña. | — |
 | `network/` | Construye el grafo bipartito dirigido con NetworkX, calcula la matriz c<sub>ij</sub> y valida el balance; si ΣO<sub>i</sub> ≠ ΣD<sub>j</sub> agrega la empresa o planta ficticia. | 1 |
@@ -275,9 +257,9 @@ nexus-analytics-eco-residuos/
 | `genetic/` | AG con cromosoma de asignación de flujos, aptitud = 1 / (costo + penalización por violación de capacidad), selección por ruleta o torneo, cruce de uno o dos puntos, mutación, semilla reproducible y múltiples corridas (ver 9.1). | 3 |
 | `sensitivity/` | A partir de la base óptima del Simplex calcula precios sombra, holguras, costos reducidos y rangos de factibilidad (O<sub>i</sub>, D<sub>j</sub>) y de optimalidad (c<sub>ij</sub>) que no alteran la base; simula escenarios porcentuales (ver 9.2). | 4 |
 | `comparison/` | Calcula costo, tiempo y gap % = (Z<sub>AG</sub> − Z<sub>exacto</sub>) / Z<sub>exacto</sub> × 100 y arma el reporte comparativo. | 4 |
-| `data_io/` | Importa y exporta los datos de entrada (CSV, XLSX, JSON) y los reportes (PDF, CSV, XLSX) en UTF-8. | 4 |
+| `data_io/` | Genera el reporte comparativo en PDF con los colores del tema claro de `config.toml`. | 4 |
 | `services/` | Casos de uso que combinan algoritmos y persistencia: crear escenarios, ejecutar métodos, guardar resultados y comparar. | — |
-| `utils/` | Excepciones del dominio, cronómetro y registro de eventos. | — |
+| `utils/` | Metaclase Singleton, excepciones del dominio y cronómetro. | — |
 
 ### 8.2 Frontend
 
@@ -449,7 +431,6 @@ notepad .env
 | `DB_NAME` | Nombre de la base de datos | `ecoresiduos` |
 | `DB_USER` | Usuario de la base de datos | `postgres` |
 | `DB_PASSWORD` | Contraseña definida al instalar PostgreSQL | — |
-| `APP_ENV` | Entorno de ejecución | `development` |
 | `APP_SECRET` | Clave para firmar la cookie de sesión (opcional; si se omite se deriva de la conexión) | una cadena larga y aleatoria |
 
 El archivo `.env` contiene contraseñas: está en `.gitignore` y no debe subirse al repositorio.
@@ -469,6 +450,8 @@ La aplicación se abre en `http://localhost:8501`. Para detenerla pulse **Ctrl +
 | `analista` | `Analista2026*` | Analista |
 
 > Cambiar la contraseña por defecto antes de cualquier despliegue. Tras 3 intentos fallidos la cuenta se bloquea durante 1 hora.
+
+**Colores de la interfaz.** Todos los colores están en `.streamlit/config.toml`: `[theme.light]` para el tema claro y `[theme.dark]` para el oscuro (fondo, tarjetas, texto, bordes, acento y los colores de estado verde, azul, naranja y rojo). Los estilos, las gráficas, el grafo de la red, los componentes de Streamlit y el reporte PDF los leen de ahí; al cambiar un valor reinicie Streamlit para verlo en toda la aplicación.
 
 ### 11.6 Problemas frecuentes
 
@@ -504,7 +487,7 @@ La aplicación se abre en `http://localhost:8501`. Para detenerla pulse **Ctrl +
 | RNF07 | Reproducibilidad | Semilla configurable y parámetros del AG registrados |
 | RNF10 | Integridad | Las simulaciones no alteran los datos originales |
 | RNF12 | Demostración | Ejecución local sin internet con casos precargados |
-| RNF13 | Interoperabilidad | CSV, XLSX, JSON y PDF en UTF-8 |
+| RNF13 | Interoperabilidad | Reporte en PDF y datos de la red en un script SQL con codificación UTF-8 |
 
 ## 14. Hoja de ruta
 
@@ -550,6 +533,8 @@ Se trabaja con ramas por módulo, como exige el proyecto:
 | `docs/Requerimientos.docx` | Requerimientos funcionales, no funcionales e historias de usuario |
 | `docs/Fase1_Modelado_Red_Logistica.docx` | Modelado de la red y modelo de programación lineal |
 | `docs/MER_EcoResiduos.drawio` | Modelo entidad-relación (abrir con [draw.io](https://app.diagrams.net)) |
+| `docs/diagramas/Diagrama_clases.drawio` | Diagrama de clases |
+| `docs/diagramas/Diagramas_de_secuencia_EcoResiduos.pdf` | Diagramas de secuencia por historia de usuario (fuentes Mermaid en `docs/diagramas/secuencia/`) |
 | `database/ecoresiduos_db.sql` | Script DDL completo y datos del caso base |
 
 ## 18. Licencia

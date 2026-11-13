@@ -16,6 +16,7 @@ tarjetas = servicio.resumenes(METODO_EXACTO)
 costo_base = next((t.costo_exacto for t in tarjetas if t.es_base), None)
 
 
+# Descripción de la tarjeta del escenario.
 def descripcion(t: TarjetaEscenario) -> str:
     if t.descripcion:
         return t.descripcion
@@ -24,6 +25,7 @@ def descripcion(t: TarjetaEscenario) -> str:
             f"{fmt.cantidad(round(t.alfa * t.factor_transporte / 100, 2))} COP/t·km{factor}")
 
 
+# Variación del costo exacto frente al caso base.
 def variacion(t: TarjetaEscenario) -> str:
     if t.es_base or t.costo_exacto is None or not costo_base:
         return "—"
@@ -32,11 +34,13 @@ def variacion(t: TarjetaEscenario) -> str:
     return f"{signo}{fmt.numero(abs(cambio), 1)} %"
 
 
+# Activa el escenario y abre la página de inicio.
 def abrir(escenario_id: int):
     st.session_state.escenario_activo = escenario_id
     st.session_state._abrir_parametros = True
 
 
+# Duplica el escenario y lo deja activo.
 def duplicar(t: TarjetaEscenario):
     try:
         servicio.duplicar(t.id, usuario_actual().id)
@@ -46,6 +50,7 @@ def duplicar(t: TarjetaEscenario):
     session.avisar(f"Se creó una copia de «{t.nombre}».")
 
 
+# Diálogo para crear un escenario a partir de otro.
 @st.dialog("Nuevo escenario")
 def dialogo_nuevo():
     nombres = {t.id: t.nombre for t in tarjetas}

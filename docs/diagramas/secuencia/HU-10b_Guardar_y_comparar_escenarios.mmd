@@ -1,0 +1,51 @@
+%%{init: {"theme": "base", "fontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "themeVariables": {"actorBkg": "#FFFFFF", "actorBorder": "#3F3F46", "actorTextColor": "#27272A", "actorLineColor": "#3F3F46", "signalColor": "#27272A", "signalTextColor": "#27272A", "labelBoxBkgColor": "#FFFFFF", "labelBoxBorderColor": "#3F3F46", "labelTextColor": "#27272A", "loopTextColor": "#3F3F46", "noteBkgColor": "#FFFBEB", "noteBorderColor": "#E5C07B", "noteTextColor": "#3F3F46", "activationBkgColor": "#F4F4F5", "activationBorderColor": "#A1A1AA"}, "sequence": {"messageFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "actorFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "noteFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "messageFontSize": 14, "actorFontSize": 14, "noteFontSize": 13, "mirrorActors": true, "actorMargin": 60, "messageMargin": 32, "boxMargin": 8, "noteMargin": 10, "width": 170, "height": 56, "useMaxWidth": false}, "themeCSS": ".actor-line{stroke:#3F3F46 !important;stroke-width:1.3px !important}.actor-man line,.actor-man circle{stroke:#D946EF !important;stroke-width:2px !important}.actor-man circle{fill:#FFFFFF !important}text.actor-man,text.actor tspan{fill:#27272A !important}.messageLine0,.messageLine1{stroke:#27272A !important;stroke-width:1.4px !important}.loopLine{stroke:#3F3F46 !important;stroke-dasharray:2 3 !important;stroke-width:1.2px !important}.labelBox{fill:#FFFFFF !important;stroke:#3F3F46 !important}.loopText,.loopText tspan{fill:#3F3F46 !important}rect.actor{rx:8px;ry:8px;stroke-width:1.6px !important;filter:drop-shadow(0 2px 3px rgba(0,0,0,.12))}rect.actor[name=SEN]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=ESC]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=SOP]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=GEN]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=BD]{fill:#E8FBFF !important;stroke:#22CCEE !important}rect.actor[name=SES]{fill:#FFF1F1 !important;stroke:#F07070 !important}rect.actor[name=CMP]{fill:#FFF4E8 !important;stroke:#F5A04A !important}"}}%%
+%% HU-10 · Guardar la simulación como escenarios y compararlos
+sequenceDiagram
+    actor A as Analista
+    participant SEN as ServicioSensibilidad
+    participant ESC as ServicioEscenarios
+    participant SOP as ServicioOptimizacion
+    participant GEN as ServicioGenetico
+    participant BD as BaseDatos
+    participant SES as Session (SQLAlchemy)
+    participant CMP as ServicioComparacion
+    A->>+SEN: guardar_como_escenarios(escenario: DatosEscenario, usuario_id: int,<br/>tipo: str, indice: int | None, puntos: list[PuntoSimulacion],<br/>parametros_ag: ParametrosAG | None, al_avanzar: Callable[[int, int],<br/>None] | None): int
+    alt solo hay la variación 0 %
+        SEN-->>A: ErrorValidacion
+    else hay variaciones
+        SEN->>+BD: sesion(): Iterator[Session]
+        BD-->>-SEN: Session
+        SEN->>+SES: scalar(statement: Select[tuple[int]]): int | None
+        SES-->>-SEN: int | None
+        SEN->>+SES: add(instance: AnalisisSensibilidad): None
+        SES-->>-SEN: None
+        SEN->>+SES: flush(): None
+        SES-->>-SEN: None
+        BD->>+SES: commit(): None
+        SES-->>-BD: None
+        loop por cada variación distinta de 0 %
+            SEN->>SEN: _nombre_libre(usuario_id: int, nombre: str): str
+            SEN->>+ESC: duplicar(escenario_id: int, usuario_id: int, nombre: str | None,<br/>descripcion: str | None): int
+            ESC-->>-SEN: int
+            SEN->>+ESC: aplicar_variacion(escenario_id: int, tipo: str, empresa_id: int | None,<br/>planta_id: int | None, variacion_pct: float): None
+            ESC-->>-SEN: None
+            SEN->>+ESC: cargar(escenario_id: int): DatosEscenario
+            ESC-->>-SEN: DatosEscenario
+            SEN->>+SOP: resolver_exacto(escenario: DatosEscenario): EjecucionExacta
+            SOP-->>-SEN: EjecucionExacta
+            opt la simulación usó el AG
+                SEN->>+GEN: resolver(escenario: DatosEscenario, parametros: ParametrosAG, corridas: int,<br/>al_avanzar: Callable[[int, int, int, int], None] | None): LoteAG
+                GEN-->>-SEN: LoteAG
+            end
+            SEN->>+SES: add(instance: PuntoSensibilidad): None
+            SES-->>-SEN: None
+            BD->>+SES: commit(): None
+            SES-->>-BD: None
+        end
+        SEN-->>A: int
+    end
+    deactivate SEN
+    A->>+ESC: resumenes(metodo: str): list[TarjetaEscenario]
+    ESC-->>-A: list[TarjetaEscenario]
+    A->>+CMP: por_escenarios(ids: list[int] | None): list[FilaComparacion]
+    CMP-->>-A: list[FilaComparacion]

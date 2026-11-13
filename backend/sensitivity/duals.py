@@ -1,15 +1,3 @@
-"""Precios sombra y costos reducidos a partir de la base óptima del Simplex.
-
-Se usa la formulación de la Fase 1 sin nodos ficticios:
-
-* oferta igual o menor que la demanda total: Σⱼ xᵢⱼ = Oᵢ y Σᵢ xᵢⱼ ≤ Dⱼ;
-* oferta mayor que la demanda: Σⱼ xᵢⱼ ≤ Oᵢ y Σᵢ xᵢⱼ = Dⱼ (las plantas se llenan).
-
-En forma estándar cada desigualdad lleva su holgura, M = [[A_igual, 0], [A_menor, I]].
-Con la base óptima B (columnas de M) se obtienen B⁻¹, los duales y = c_B B⁻¹
-y los costos reducidos d = c − y M, que son la base del análisis.
-"""
-
 from dataclasses import dataclass
 
 import numpy as np
@@ -23,34 +11,40 @@ from backend.network.balance import TipoBalance, verificar_balance
 class BaseOptima:
     M: np.ndarray
     b: np.ndarray
-    c: np.ndarray                 # costos de todas las columnas (arcos y holguras)
+    c: np.ndarray
     base: np.ndarray
     B_inv: np.ndarray
-    duales: np.ndarray            # uno por restricción: primero las m de oferta, luego las n de demanda
-    reducidos: np.ndarray         # uno por columna
+    # Precios sombra: primero los de oferta y luego los de demanda.
+    duales: np.ndarray
+    reducidos: np.ndarray
     x_base: np.ndarray
-    arcos: np.ndarray             # (i, j) de cada columna de flujo
+    arcos: np.ndarray
     m: int
     n: int
-    oferta_igual: bool            # True: oferta "="; False: oferta "≤" y demanda "="
+    # True si la igualdad está en la oferta; False si está en la demanda.
+    oferta_igual: bool
 
+    # Número de columnas de flujo del programa lineal.
     @property
     def num_arcos(self) -> int:
         return len(self.arcos)
 
+    # La solución es degenerada si alguna variable básica vale cero.
     @property
     def degenerada(self) -> bool:
         return bool(np.any(np.abs(self.x_base) < 1e-7))
 
+    # Fila de la restricción de oferta de la empresa i.
     def fila_oferta(self, i: int) -> int:
         return i
 
+    # Fila de la restricción de demanda de la planta j.
     def fila_demanda(self, j: int) -> int:
         return self.m + j
 
 
+# Resuelve la formulación sin nodos ficticios y obtiene la base óptima con su inversa.
 def base_optima(problema: ProblemaTransporte) -> BaseOptima | None:
-    """Resuelve la formulación natural y arma B⁻¹; None si no hay óptimo o la base no es cuadrada."""
     m, n = problema.dimension
     costos = np.nan_to_num(problema.costos)
     arcos = np.argwhere(problema.habilitadas)
@@ -64,6 +58,7 @@ def base_optima(problema: ProblemaTransporte) -> BaseOptima | None:
     c_arcos = costos[filas, columnas]
     exceso_oferta = verificar_balance(problema.oferta, problema.demanda).tipo is TipoBalance.EXCESO_OFERTA
 
+    # Con exceso de oferta la igualdad pasa a la demanda: Σ_i x_ij = D_j y Σ_j x_ij ≤ O_i.
     if exceso_oferta:
         A_igual, b_igual, A_menor, b_menor = A_demanda, problema.demanda, A_oferta, problema.oferta
     else:
@@ -73,13 +68,14 @@ def base_optima(problema: ProblemaTransporte) -> BaseOptima | None:
         return None
 
     filas_igual, filas_menor = len(b_igual), len(b_menor)
+    # Forma estándar: M = [A_igual 0; A_menor I], con una holgura por desigualdad.
     M_simplex = np.block([[A_igual, np.zeros((filas_igual, filas_menor))],
                           [A_menor, np.eye(filas_menor)]])
     b_simplex = np.concatenate([b_igual, b_menor])
     if len(resultado.base) != M_simplex.shape[0]:
         return None
 
-    # Reordena las filas para que siempre queden primero las de oferta y luego las de demanda.
+    # Las filas quedan siempre en el orden oferta y luego demanda.
     orden = np.r_[filas_igual:filas_igual + filas_menor, 0:filas_igual] if exceso_oferta \
         else np.arange(filas_igual + filas_menor)
     M, b = M_simplex[orden], b_simplex[orden]
@@ -90,7 +86,9 @@ def base_optima(problema: ProblemaTransporte) -> BaseOptima | None:
         B_inv = np.linalg.inv(M[:, base])
     except np.linalg.LinAlgError:
         return None
+    # Precios sombra: y = c_B · B⁻¹
     duales = c[base] @ B_inv
+    # Costos reducidos: d = c − y · M
     reducidos = c - duales @ M
     reducidos[np.abs(reducidos) < 1e-7] = 0.0
     x_base = B_inv @ b
@@ -98,6 +96,7 @@ def base_optima(problema: ProblemaTransporte) -> BaseOptima | None:
                       oferta_igual=not exceso_oferta)
 
 
+# Matriz de flujos a partir de las variables básicas.
 def flujos(base: BaseOptima) -> np.ndarray:
     x = np.zeros((base.m, base.n))
     for fila, columna in enumerate(base.base):
@@ -105,10 +104,3 @@ def flujos(base: BaseOptima) -> np.ndarray:
             i, j = base.arcos[columna]
             x[i, j] = max(base.x_base[fila], 0.0)
     return x
-
-
-def costos_reducidos(base: BaseOptima) -> np.ndarray:
-    """Matriz m × n; NaN en las rutas deshabilitadas."""
-    d = np.full((base.m, base.n), np.nan)
-    d[base.arcos[:, 0], base.arcos[:, 1]] = base.reducidos[:base.num_arcos]
-    return d

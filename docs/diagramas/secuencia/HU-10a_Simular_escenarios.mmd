@@ -1,0 +1,51 @@
+%%{init: {"theme": "base", "fontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "themeVariables": {"actorBkg": "#FFFFFF", "actorBorder": "#3F3F46", "actorTextColor": "#27272A", "actorLineColor": "#3F3F46", "signalColor": "#27272A", "signalTextColor": "#27272A", "labelBoxBkgColor": "#FFFFFF", "labelBoxBorderColor": "#3F3F46", "labelTextColor": "#27272A", "loopTextColor": "#3F3F46", "noteBkgColor": "#FFFBEB", "noteBorderColor": "#E5C07B", "noteTextColor": "#3F3F46", "activationBkgColor": "#F4F4F5", "activationBorderColor": "#A1A1AA"}, "sequence": {"messageFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "actorFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "noteFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "messageFontSize": 14, "actorFontSize": 14, "noteFontSize": 13, "mirrorActors": true, "actorMargin": 60, "messageMargin": 32, "boxMargin": 8, "noteMargin": 10, "width": 170, "height": 56, "useMaxWidth": false}, "themeCSS": ".actor-line{stroke:#3F3F46 !important;stroke-width:1.3px !important}.actor-man line,.actor-man circle{stroke:#D946EF !important;stroke-width:2px !important}.actor-man circle{fill:#FFFFFF !important}text.actor-man,text.actor tspan{fill:#27272A !important}.messageLine0,.messageLine1{stroke:#27272A !important;stroke-width:1.4px !important}.loopLine{stroke:#3F3F46 !important;stroke-dasharray:2 3 !important;stroke-width:1.2px !important}.labelBox{fill:#FFFFFF !important;stroke:#3F3F46 !important}.loopText,.loopText tspan{fill:#3F3F46 !important}rect.actor{rx:8px;ry:8px;stroke-width:1.6px !important;filter:drop-shadow(0 2px 3px rgba(0,0,0,.12))}rect.actor[name=ESC]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=GEN]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=SEN]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=DE]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=MT]{fill:#EAFAF0 !important;stroke:#4CCF7A !important}rect.actor[name=AGA]{fill:#EAFAF0 !important;stroke:#4CCF7A !important}rect.actor[name=RAG]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=PS]{fill:#F3EFFF !important;stroke:#A285F0 !important}"}}%%
+%% HU-10 · Simulación de escenarios
+sequenceDiagram
+    actor A as Analista
+    participant ESC as ServicioEscenarios
+    participant GEN as ServicioGenetico
+    participant SEN as ServicioSensibilidad
+    participant DE as escenario: DatosEscenario
+    participant MT as ModeloTransporte
+    participant AGA as AlgoritmoGenetico
+    participant RAG as resultado: ResultadoAG
+    participant PS as punto: PuntoSimulacion
+    A->>+ESC: cargar(escenario_id: int): DatosEscenario
+    ESC-->>-A: DatosEscenario
+
+    A->>+GEN: ultimo_lote(escenario: DatosEscenario): LoteAG | None
+    GEN-->>-A: LoteAG | None
+    A->>+SEN: simular(escenario: DatosEscenario, tipo: str, indice: int | None,<br/>minimo: float, maximo: float, paso: float,<br/>parametros_ag: ParametrosAG | None, al_avanzar: Callable[[int, int],<br/>None] | None): list[PuntoSimulacion]
+    alt mínimo ≥ máximo, paso ≤ 0 o más de 21 puntos
+        SEN-->>A: ErrorValidacion
+    else variaciones válidas
+        SEN->>+DE: modelo(): DatosModelo
+        DE-->>-SEN: DatosModelo
+        Note over SEN,PS: scenario_simulator.simular(datos, tipo, indice, valores, parametros_ag, al_avanzar)
+        SEN->>+MT: ModeloTransporte(problema: ProblemaTransporte, simplex: Simplex | None)
+        MT-->>-SEN: ModeloTransporte
+        SEN->>+MT: resolver(): SolucionTransporte
+        MT-->>-SEN: SolucionTransporte
+        loop por cada variación (%)
+            SEN->>+MT: ModeloTransporte(problema: ProblemaTransporte, simplex: Simplex | None)
+            MT-->>-SEN: ModeloTransporte
+            SEN->>+MT: resolver(): SolucionTransporte
+            MT-->>-SEN: SolucionTransporte
+            SEN->>+PS: PuntoSimulacion(variacion_pct: float, costo_exacto: float | None,<br/>milisegundos_exacto: float, costo_ag: float | None,<br/>milisegundos_ag: float | None, ag_factible: bool | None,<br/>balance: TipoBalance, cambia_plan: bool)
+            PS-->>-SEN: PuntoSimulacion
+            opt se pidió el AG y la solución exacta es óptima
+                SEN->>+AGA: AlgoritmoGenetico(problema: ProblemaTransporte, parametros: ParametrosAG)
+                AGA-->>-SEN: AlgoritmoGenetico
+                SEN->>+AGA: ejecutar(al_avanzar: Callable[[int, int], None] | None): ResultadoAG
+                AGA-->>-SEN: ResultadoAG
+                SEN->>+RAG: «property» es_factible(): bool
+                RAG-->>-SEN: bool
+            end
+        end
+        SEN-->>A: list[PuntoSimulacion]
+    end
+    deactivate SEN
+    loop por cada punto
+        A->>+PS: «property» gap(): float | None
+        PS-->>-A: float | None
+    end

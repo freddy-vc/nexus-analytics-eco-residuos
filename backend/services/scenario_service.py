@@ -16,8 +16,8 @@ from backend.utils.exceptions import ErrorNoEncontrado, ErrorValidacion
 from backend.utils.singleton import MetaSingleton
 
 
+# Clave de orden natural de códigos: E2 antes que E10.
 def clave_natural(codigo: str):
-    """Ordena E2 antes que E10."""
     coincidencia = re.match(r"([A-Za-z]*)(\d*)", codigo)
     prefijo, numero = coincidencia.groups() if coincidencia else (codigo, "")
     return prefijo, int(numero) if numero else 0
@@ -93,52 +93,61 @@ class DatosEscenario:
     ids_rutas: np.ndarray
     habilitadas: np.ndarray
 
+    # Oferta semanal de cada empresa.
     @property
     def oferta(self) -> np.ndarray:
         return np.array([e.oferta for e in self.empresas], float)
 
+    # Demanda de cada planta.
     @property
     def demanda(self) -> np.ndarray:
         return np.array([p.demanda for p in self.plantas], float)
 
+    # Costo de operación por tonelada de cada planta.
     @property
     def costos_operacion(self) -> np.ndarray:
         return np.array([p.costo_operacion for p in self.plantas], float)
 
+    # Precio de compra por tonelada de cada empresa.
     @property
     def precios_compra(self) -> np.ndarray:
         return np.array([e.precio for e in self.empresas], float)
 
+    # Costo de transporte por tonelada-kilómetro con el factor del escenario.
     @property
     def alfa_efectivo(self) -> float:
         return alfa_efectivo(self.alfa, self.factor_transporte)
 
+    # Matriz de costos unitarios del escenario.
     @property
     def costos_unitarios(self) -> np.ndarray:
         return costos_unitarios(self.alfa_efectivo, np.nan_to_num(self.distancias),
                                 self.costos_operacion, self.precios_compra)
 
+    # Datos del modelo desacoplados de la base de datos.
     def modelo(self) -> DatosModelo:
         return DatosModelo(self.oferta, self.demanda, np.nan_to_num(self.distancias), self.costos_operacion,
                            self.precios_compra, self.alfa_efectivo, self.habilitadas.copy())
 
+    # Problema de transporte listo para resolver.
     def problema(self) -> ProblemaTransporte:
         return ProblemaTransporte(self.oferta, self.demanda, self.costos_unitarios,
                                   self.habilitadas.copy())
 
 
 class ServicioEscenarios(metaclass=MetaSingleton):
-    """Lectura y actualización de los parámetros del modelo por escenario."""
-
+    # Obtiene la instancia única de la base de datos.
     def __init__(self):
         self._bd = BaseDatos()
 
+    # Escenarios disponibles con el caso base primero.
     def listar(self) -> list[ResumenEscenario]:
         with self._bd.sesion() as sesion:
             escenarios = sesion.scalars(select(Escenario).order_by(
                 Escenario.es_base.desc(), Escenario.creado_en)).all()
             return [ResumenEscenario(e.id, e.nombre, e.es_base) for e in escenarios]
 
+    # Carga empresas, plantas, rutas y parámetros del escenario.
     def cargar(self, escenario_id: int) -> DatosEscenario:
         with self._bd.sesion() as sesion:
             empresa = selectinload(Escenario.empresas).selectinload(EscenarioEmpresa.empresa)
@@ -187,8 +196,8 @@ class ServicioEscenarios(metaclass=MetaSingleton):
                                   escenario.origen.nombre if escenario.origen else None,
                                   empresas, plantas, distancias, ids_rutas, habilitadas)
 
+    # Ajusta el factor sobre el costo base para obtener el costo de transporte indicado.
     def guardar_alfa(self, escenario_id: int, costo_transporte: float) -> None:
-        """Fija el costo de transporte usado en el modelo ajustando el factor sobre el costo base."""
         if costo_transporte <= 0:
             raise ErrorValidacion("El costo de transporte debe ser mayor que 0.")
         with self._bd.sesion() as sesion:
@@ -196,8 +205,8 @@ class ServicioEscenarios(metaclass=MetaSingleton):
             escenario.factor_transporte_pct = factor_desde_costo(costo_transporte,
                                                                  float(escenario.alfa_cop_t_km))
 
+    # Actualiza las distancias; una ruta queda habilitada si su distancia es positiva.
     def guardar_distancias(self, distancias: dict[int, float]) -> None:
-        """Actualiza dᵢⱼ por ruta; una ruta queda habilitada cuando su distancia es positiva."""
         if any(km < 0 for km in distancias.values()):
             raise ErrorValidacion("Las distancias deben ser mayores o iguales a 0.")
         with self._bd.sesion() as sesion:
@@ -205,10 +214,10 @@ class ServicioEscenarios(metaclass=MetaSingleton):
                 ruta.distancia_km = distancias[ruta.id]
                 ruta.habilitada = distancias[ruta.id] > 0
 
+    # Guarda nombre, factor, oferta y precio por empresa, y demanda y costo por planta.
     def guardar_parametros(self, escenario_id: int, nombre: str, factor: float,
                            empresas: dict[int, tuple[float, float]],
                            plantas: dict[int, tuple[float, float]]) -> None:
-        """empresas: {vínculo: (oferta, precio por tonelada)}; plantas: {vínculo: (demanda, costo)}."""
         nombre = nombre.strip()
         if not nombre:
             raise ErrorValidacion("El escenario debe tener un nombre.")
@@ -231,8 +240,8 @@ class ServicioEscenarios(metaclass=MetaSingleton):
                 if vinculo.id in plantas:
                     vinculo.demanda_t_semana, vinculo.costo_operacion_cop_t = plantas[vinculo.id]
 
+    # Datos de las tarjetas de escenarios con el último costo del método indicado.
     def resumenes(self, metodo: str) -> list[TarjetaEscenario]:
-        """Datos de las tarjetas de la página Escenarios, con el último costo del método dado."""
         with self._bd.sesion() as sesion:
             escenarios = sesion.scalars(
                 select(Escenario).options(selectinload(Escenario.origen),
@@ -261,9 +270,9 @@ class ServicioEscenarios(metaclass=MetaSingleton):
                     costo_exacto=float(costo) if costo is not None else None))
             return tarjetas
 
+    # Crea un escenario derivado con todos los parámetros del original.
     def duplicar(self, escenario_id: int, usuario_id: int, nombre: str | None = None,
                  descripcion: str | None = None) -> int:
-        """Copia oferta, precios, demanda, costos y rutas en un escenario derivado del original."""
         with self._bd.sesion() as sesion:
             original = sesion.scalar(
                 select(Escenario).where(Escenario.id == escenario_id).options(
@@ -295,9 +304,9 @@ class ServicioEscenarios(metaclass=MetaSingleton):
             sesion.flush()
             return copia.id
 
+    # Aplica una variación porcentual a un parámetro, a un nodo o a todos.
     def aplicar_variacion(self, escenario_id: int, tipo: str, empresa_id: int | None,
                           planta_id: int | None, variacion_pct: float) -> None:
-        """Multiplica un parámetro del escenario por (1 + variación %); sin empresa o planta aplica a todas."""
         factor = 1 + variacion_pct / 100
         with self._bd.sesion() as sesion:
             escenario = sesion.scalar(select(Escenario).where(Escenario.id == escenario_id).options(
@@ -318,6 +327,7 @@ class ServicioEscenarios(metaclass=MetaSingleton):
                         else:
                             v.costo_operacion_cop_t = round(float(v.costo_operacion_cop_t) * factor, 2)
 
+    # Nombre libre para la copia de un escenario.
     @staticmethod
     def _nombre_copia(sesion, usuario_id: int, base: str) -> str:
         existentes = set(sesion.scalars(select(Escenario.nombre).where(Escenario.usuario_id == usuario_id)))
@@ -326,6 +336,7 @@ class ServicioEscenarios(metaclass=MetaSingleton):
             nombre, k = f"{base} (copia {k})", k + 1
         return nombre
 
+    # Rechaza nombres de escenario repetidos para el mismo usuario.
     @staticmethod
     def _validar_nombre_libre(sesion, usuario_id: int, nombre: str, excluir_id: int | None = None):
         duplicado = sesion.scalar(select(Escenario.id).where(
@@ -334,6 +345,7 @@ class ServicioEscenarios(metaclass=MetaSingleton):
         if duplicado:
             raise ErrorValidacion(f"Ya existe un escenario llamado «{nombre}».")
 
+    # Escenario por su identificador o error si no existe.
     @staticmethod
     def _obtener(sesion, escenario_id: int) -> Escenario:
         escenario = sesion.get(Escenario, escenario_id)

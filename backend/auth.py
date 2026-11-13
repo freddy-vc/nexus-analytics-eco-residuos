@@ -21,30 +21,23 @@ class UsuarioSesion:
     apellidos: str
     rol: str
 
+    # Iniciales del usuario para el avatar de la barra superior.
     @property
     def iniciales(self) -> str:
         return (self.nombres[:1] + self.apellidos[:1]).upper()
 
-    @property
-    def nombre_visible(self) -> str:
-        return self.nombres
 
-
+# Autenticación con contraseña cifrada con bcrypt y sesión con token firmado.
 class ServicioAutenticacion(metaclass=MetaSingleton):
-    """Inicio de sesión con usuario o correo y contraseña cifrada con bcrypt.
-
-    Tras MAX_INTENTOS fallidos la cuenta se bloquea MINUTOS_BLOQUEO minutos.
-    La sesión se conserva entre recargas con un token firmado (HMAC-SHA256)
-    que contiene el id del usuario y su fecha de expiración.
-    """
-
     MAX_INTENTOS = 3
     MINUTOS_BLOQUEO = 60
 
+    # Obtiene las instancias únicas de la base de datos y de la configuración.
     def __init__(self):
         self._bd = BaseDatos()
         self._configuracion = Configuracion()
 
+    # Valida usuario o correo y contraseña, controlando intentos fallidos y bloqueo temporal.
     def autenticar(self, identificador: str, clave: str) -> UsuarioSesion:
         identificador = identificador.strip().lower()
         if not identificador or not clave:
@@ -62,6 +55,7 @@ class ServicioAutenticacion(metaclass=MetaSingleton):
                 raise ErrorAutenticacion("Cuenta bloqueada temporalmente por intentos fallidos.",
                                          bloqueado_hasta=usuario.bloqueado_hasta)
 
+            # Contraseña incorrecta: suma un intento y bloquea la cuenta al llegar al máximo.
             if not bcrypt.checkpw(clave.encode(), usuario.password_hash.encode()):
                 usuario.intentos_fallidos += 1
                 restantes = self.MAX_INTENTOS - usuario.intentos_fallidos
@@ -83,21 +77,26 @@ class ServicioAutenticacion(metaclass=MetaSingleton):
             usuario.ultimo_acceso = ahora
             return self._a_sesion(usuario)
 
+    # Texto legible de la duración del bloqueo.
     def _duracion_bloqueo(self) -> str:
         horas, minutos = divmod(self.MINUTOS_BLOQUEO, 60)
         if minutos:
             return f"{self.MINUTOS_BLOQUEO} minutos"
         return "1 hora" if horas == 1 else f"{horas} horas"
 
+    # Genera el token firmado que conserva la sesión entre recargas.
     def emitir_token(self, usuario: UsuarioSesion) -> str:
         expira = int(time.time() + self._configuracion.horas_sesion * 3600)
+        # Formato del token: id.expiración.firma.
         contenido = f"{usuario.id}.{expira}"
         return f"{contenido}.{self._firmar(contenido)}"
 
+    # Restaura el usuario a partir de un token válido y vigente; None en otro caso.
     def validar_token(self, token: str | None) -> UsuarioSesion | None:
         try:
             id_usuario, expira, firma = (token or "").split(".")
             contenido = f"{id_usuario}.{expira}"
+            # Comparación de la firma en tiempo constante y control de expiración.
             if not hmac.compare_digest(firma, self._firmar(contenido)) or int(expira) < time.time():
                 return None
             id_usuario = int(id_usuario)
@@ -108,10 +107,12 @@ class ServicioAutenticacion(metaclass=MetaSingleton):
             usuario = sesion.get(Usuario, id_usuario)
             return self._a_sesion(usuario) if usuario and usuario.activo else None
 
+    # Firma HMAC-SHA256 con el secreto de sesión.
     def _firmar(self, contenido: str) -> str:
         return hmac.new(self._configuracion.secreto_sesion.encode(), contenido.encode(),
                         hashlib.sha256).hexdigest()
 
+    # Convierte la entidad Usuario en los datos de sesión.
     @staticmethod
     def _a_sesion(usuario: Usuario) -> UsuarioSesion:
         return UsuarioSesion(usuario.id, usuario.username, usuario.nombres, usuario.apellidos,

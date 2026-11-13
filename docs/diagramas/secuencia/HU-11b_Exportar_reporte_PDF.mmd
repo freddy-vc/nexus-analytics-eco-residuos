@@ -1,0 +1,52 @@
+%%{init: {"theme": "base", "fontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "themeVariables": {"actorBkg": "#FFFFFF", "actorBorder": "#3F3F46", "actorTextColor": "#27272A", "actorLineColor": "#3F3F46", "signalColor": "#27272A", "signalTextColor": "#27272A", "labelBoxBkgColor": "#FFFFFF", "labelBoxBorderColor": "#3F3F46", "labelTextColor": "#27272A", "loopTextColor": "#3F3F46", "noteBkgColor": "#FFFBEB", "noteBorderColor": "#E5C07B", "noteTextColor": "#3F3F46", "activationBkgColor": "#F4F4F5", "activationBorderColor": "#A1A1AA"}, "sequence": {"messageFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "actorFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "noteFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "messageFontSize": 14, "actorFontSize": 14, "noteFontSize": 13, "mirrorActors": true, "actorMargin": 60, "messageMargin": 32, "boxMargin": 8, "noteMargin": 10, "width": 170, "height": 56, "useMaxWidth": false}, "themeCSS": ".actor-line{stroke:#3F3F46 !important;stroke-width:1.3px !important}.actor-man line,.actor-man circle{stroke:#D946EF !important;stroke-width:2px !important}.actor-man circle{fill:#FFFFFF !important}text.actor-man,text.actor tspan{fill:#27272A !important}.messageLine0,.messageLine1{stroke:#27272A !important;stroke-width:1.4px !important}.loopLine{stroke:#3F3F46 !important;stroke-dasharray:2 3 !important;stroke-width:1.2px !important}.labelBox{fill:#FFFFFF !important;stroke:#3F3F46 !important}.loopText,.loopText tspan{fill:#3F3F46 !important}rect.actor{rx:8px;ry:8px;stroke-width:1.6px !important;filter:drop-shadow(0 2px 3px rgba(0,0,0,.12))}rect.actor[name=SEN]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=TB]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=SC]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=REP]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=DOC]{fill:#EAFAF0 !important;stroke:#4CCF7A !important}rect.actor[name=CMP]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=BD]{fill:#E8FBFF !important;stroke:#22CCEE !important}rect.actor[name=SES]{fill:#FFF1F1 !important;stroke:#F07070 !important}"}}%%
+%% HU-11 · Exportar el reporte comparativo en PDF
+sequenceDiagram
+    actor A as Analista
+    participant SEN as ServicioSensibilidad
+    participant TB as tabla: Tabla
+    participant SC as seccion: Seccion
+    participant REP as reporte: Reporte
+    participant DOC as pdf: _Documento
+    participant CMP as ServicioComparacion
+    participant BD as BaseDatos
+    participant SES as Session (SQLAlchemy)
+    opt incluye el análisis de sensibilidad
+        A->>+SEN: analizar(escenario: DatosEscenario): AnalisisSensibilidad | None
+        SEN-->>-A: AnalisisSensibilidad | None
+    end
+    loop por cada sección elegida
+        A->>+SC: Seccion(titulo: str, parrafos: list[str], tablas: list[Tabla])
+        SC-->>-A: Seccion
+        A->>+TB: Tabla(columnas: list[str], filas: list[list[str]],<br/>alineacion: list[str] | None)
+        TB-->>-A: Tabla
+    end
+    A->>+REP: Reporte(titulo: str, subtitulo: str, generado_en: datetime,<br/>secciones: list[Seccion])
+    REP-->>-A: Reporte
+    Note over A,DOC: report_exporter.generar_pdf(reporte) arma el PDF con fpdf2
+    A->>+DOC: _Documento(reporte: Reporte)
+    DOC-->>-A: _Documento
+    A->>+DOC: add_page(): None
+    DOC-->>-A: None
+    loop por cada sección, párrafo y fila de tabla
+        A->>+DOC: cell(w: float, h: float, text: str): bool
+        DOC-->>-A: bool
+        A->>+DOC: multi_cell(w: float, h: float, text: str): bool
+        DOC-->>-A: bool
+    end
+    A->>+DOC: output(): bytearray
+    DOC->>DOC: footer(): None
+    DOC-->>-A: bytearray
+    opt hay solución exacta y lote del AG (al descargar)
+        A->>+CMP: registrar(exacta_id: int, ag_id: int, observaciones: str | None): None
+        CMP->>+BD: sesion(): Iterator[Session]
+        BD-->>-CMP: Session
+        CMP->>+SES: scalar(statement: Select[tuple[int]]): int | None
+        SES-->>-CMP: int | None
+        opt la pareja no está registrada
+            CMP->>+SES: add(instance: Comparacion): None
+            SES-->>-CMP: None
+        end
+        BD->>+SES: commit(): None
+        SES-->>-BD: None
+        CMP-->>-A: None
+    end

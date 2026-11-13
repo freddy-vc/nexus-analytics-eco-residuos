@@ -1,28 +1,41 @@
-"""Exporta el reporte comparativo a PDF con fpdf2."""
+import tomllib
 
 from fpdf import FPDF
 
 from backend.comparison.comparative_report import Reporte, Tabla
+from backend.config import DIRECTORIO_RAIZ
 
 _REEMPLAZOS = {"—": "-", "–": "-", "−": "-", "→": "->", "≈": "aprox.", "…": "...", "“": '"', "”": '"',
                "‘": "'", "’": "'", "≤": "<=", "≥": ">=", " ": " ", " ": " "}
-_VERDE, _GRIS, _TEXTO, _TENUE = (59, 130, 14), (240, 243, 246), (31, 42, 48), (91, 103, 112)
 
 
+# Lee la paleta del tema claro de config.toml para el PDF.
+def _colores_tema_claro() -> tuple[tuple[int, int, int], ...]:
+    with open(DIRECTORIO_RAIZ / ".streamlit/config.toml", "rb") as archivo:
+        tema = tomllib.load(archivo)["theme"]["light"]
+    return tuple(tuple(int(tema[opcion].lstrip("#")[k:k + 2], 16) for k in (0, 2, 4))
+                 for opcion in ("greenTextColor", "dataframeHeaderBackgroundColor", "textColor", "grayTextColor"))
+
+
+_VERDE, _GRIS, _TEXTO, _TENUE = _colores_tema_claro()
+
+
+# Sustituye los símbolos que las fuentes base del PDF (Latin-1) no pueden representar.
 def _texto(valor: str) -> str:
-    """Las fuentes base del PDF solo cubren Latin-1; se reemplazan los demás símbolos."""
     for original, reemplazo in _REEMPLAZOS.items():
         valor = valor.replace(original, reemplazo)
     return valor.encode("latin-1", "replace").decode("latin-1")
 
 
 class _Documento(FPDF):
+    # Configura la página A4 y los márgenes del documento.
     def __init__(self, reporte: Reporte):
         super().__init__(orientation="P", unit="mm", format="A4")
         self.reporte = reporte
         self.set_auto_page_break(auto=True, margin=16)
         self.set_margins(16, 16, 16)
 
+    # Pie de página con el título del reporte y la numeración.
     def footer(self):
         self.set_y(-12)
         self.set_font("Helvetica", "", 8)
@@ -31,6 +44,7 @@ class _Documento(FPDF):
                   align="C")
 
 
+# Genera el PDF del reporte comparativo y devuelve su contenido en bytes.
 def generar_pdf(reporte: Reporte) -> bytes:
     pdf = _Documento(reporte)
     pdf.add_page()
@@ -61,6 +75,7 @@ def generar_pdf(reporte: Reporte) -> bytes:
     return bytes(pdf.output())
 
 
+# Dibuja una tabla con encabezado, columnas proporcionales y filas alternadas.
 def _tabla(pdf: FPDF, tabla: Tabla) -> None:
     ancho_total = pdf.w - pdf.l_margin - pdf.r_margin
     pdf.set_font("Helvetica", "", 9)

@@ -36,25 +36,23 @@ class DatosPlanta:
 
 
 class ServicioRed(metaclass=MetaSingleton):
-    """Gestión de empresas (orígenes) y plantas (destinos) de la red.
-
-    Al crear un nodo se vincula al escenario activo y se generan sus rutas hacia
-    todos los nodos del otro conjunto, deshabilitadas hasta registrar la distancia.
-    """
-
+    # Obtiene la instancia única de la base de datos.
     def __init__(self):
         self._bd = BaseDatos()
 
+    # Catálogo de municipios ordenado por nombre.
     def municipios(self) -> list[ElementoCatalogo]:
         with self._bd.sesion() as sesion:
             filas = sesion.scalars(select(Municipio).order_by(Municipio.nombre))
             return [ElementoCatalogo(m.id, m.nombre) for m in filas]
 
+    # Catálogo de tipos de residuo ordenado por nombre.
     def tipos_residuo(self) -> list[ElementoCatalogo]:
         with self._bd.sesion() as sesion:
             filas = sesion.scalars(select(TipoResiduo).order_by(TipoResiduo.nombre))
             return [ElementoCatalogo(t.id, t.nombre) for t in filas]
 
+    # Siguiente código libre para una empresa (E) o una planta (P).
     def siguiente_codigo(self, prefijo: str) -> str:
         modelo = Empresa if prefijo == "E" else Planta
         with self._bd.sesion() as sesion:
@@ -62,6 +60,7 @@ class ServicioRed(metaclass=MetaSingleton):
         numeros = [clave_natural(c)[1] for c in codigos if c.upper().startswith(prefijo)]
         return f"{prefijo}{max(numeros, default=0) + 1}"
 
+    # Crea la empresa, la vincula al escenario y genera sus rutas hacia todas las plantas.
     def crear_empresa(self, escenario_id: int, datos: DatosEmpresa) -> None:
         datos = self._limpiar_empresa(datos)
         with self._bd.sesion() as sesion:
@@ -77,6 +76,7 @@ class ServicioRed(metaclass=MetaSingleton):
                 sesion.add(Ruta(escenario_empresa=vinculo, escenario_planta=vinculo_planta,
                                 distancia_km=0, habilitada=False))
 
+    # Actualiza los datos de la empresa y sus parámetros en el escenario.
     def actualizar_empresa(self, empresa_id: int, id_vinculo: int, datos: DatosEmpresa) -> None:
         datos = self._limpiar_empresa(datos)
         with self._bd.sesion() as sesion:
@@ -89,8 +89,8 @@ class ServicioRed(metaclass=MetaSingleton):
             empresa.municipio_id, empresa.tipo_residuo_id = datos.municipio_id, datos.tipo_residuo_id
             vinculo.oferta_t_semana, vinculo.precio_tonelada_cop = datos.oferta, datos.precio
 
+    # Elimina la empresa con sus rutas y resultados en todos los escenarios.
     def eliminar_empresa(self, empresa_id: int) -> None:
-        """Elimina la empresa de todos los escenarios junto con sus rutas y resultados."""
         with self._bd.sesion() as sesion:
             empresa = sesion.get(Empresa, empresa_id)
             if empresa is None:
@@ -101,6 +101,7 @@ class ServicioRed(metaclass=MetaSingleton):
                 AnalisisSensibilidad.empresa_id == empresa_id))
             sesion.delete(empresa)
 
+    # Crea la planta, la vincula al escenario y genera sus rutas desde todas las empresas.
     def crear_planta(self, escenario_id: int, datos: DatosPlanta) -> None:
         datos = self._limpiar_planta(datos)
         with self._bd.sesion() as sesion:
@@ -116,6 +117,7 @@ class ServicioRed(metaclass=MetaSingleton):
                 sesion.add(Ruta(escenario_empresa=vinculo_empresa, escenario_planta=vinculo,
                                 distancia_km=0, habilitada=False))
 
+    # Actualiza los datos de la planta y sus parámetros en el escenario.
     def actualizar_planta(self, planta_id: int, id_vinculo: int, datos: DatosPlanta) -> None:
         datos = self._limpiar_planta(datos)
         with self._bd.sesion() as sesion:
@@ -129,8 +131,8 @@ class ServicioRed(metaclass=MetaSingleton):
             planta.codigo, planta.municipio_id = datos.codigo, datos.municipio_id
             vinculo.demanda_t_semana, vinculo.costo_operacion_cop_t = datos.demanda, datos.costo_operacion
 
+    # Elimina la planta con sus rutas y resultados en todos los escenarios.
     def eliminar_planta(self, planta_id: int) -> None:
-        """Elimina la planta de todos los escenarios junto con sus rutas y resultados."""
         with self._bd.sesion() as sesion:
             planta = sesion.get(Planta, planta_id)
             if planta is None:
@@ -139,6 +141,7 @@ class ServicioRed(metaclass=MetaSingleton):
             sesion.execute(delete(AnalisisSensibilidad).where(AnalisisSensibilidad.planta_id == planta_id))
             sesion.delete(planta)
 
+    # Normaliza y valida los datos de la empresa.
     @staticmethod
     def _limpiar_empresa(datos: DatosEmpresa) -> DatosEmpresa:
         codigo = datos.codigo.strip().upper()
@@ -153,6 +156,7 @@ class ServicioRed(metaclass=MetaSingleton):
         return DatosEmpresa(codigo, nombre, nit, datos.municipio_id, datos.tipo_residuo_id,
                             datos.oferta, datos.precio)
 
+    # Normaliza y valida los datos de la planta.
     @staticmethod
     def _limpiar_planta(datos: DatosPlanta) -> DatosPlanta:
         codigo = datos.codigo.strip().upper()
@@ -164,6 +168,7 @@ class ServicioRed(metaclass=MetaSingleton):
             raise ErrorValidacion("La demanda y el costo de operación deben ser mayores o iguales a 0.")
         return DatosPlanta(codigo, datos.municipio_id, datos.demanda, datos.costo_operacion)
 
+    # Rechaza códigos, nombres o NIT repetidos.
     @staticmethod
     def _validar_empresa_unica(sesion, datos: DatosEmpresa, excluir_id: int | None = None):
         consulta = select(Empresa).where(Empresa.id != (excluir_id or 0))
@@ -172,12 +177,14 @@ class ServicioRed(metaclass=MetaSingleton):
         if datos.nit and sesion.scalar(consulta.where(Empresa.nit == datos.nit)):
             raise ErrorValidacion(f"Ya existe una empresa con el NIT {datos.nit}.")
 
+    # Rechaza códigos de planta repetidos.
     @staticmethod
     def _validar_planta_unica(sesion, codigo: str, excluir_id: int | None = None):
         if sesion.scalar(select(Planta).where(Planta.codigo == codigo,
                                               Planta.id != (excluir_id or 0))):
             raise ErrorValidacion(f"Ya existe una planta con el código {codigo}.")
 
+    # Escenario por su identificador o error si no existe.
     @staticmethod
     def _escenario(sesion, escenario_id: int) -> Escenario:
         escenario = sesion.get(Escenario, escenario_id)

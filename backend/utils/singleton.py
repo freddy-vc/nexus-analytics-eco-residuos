@@ -1,20 +1,15 @@
 import threading
 
 
+# Metaclase que garantiza una única instancia por clase, segura entre hilos.
 class MetaSingleton(type):
-    """Metaclase que garantiza una única instancia por clase, segura entre hilos.
-
-    Streamlit atiende cada sesión en un hilo distinto; el candado evita que dos
-    sesiones creen instancias paralelas del mismo servicio. Es reentrante porque
-    un singleton puede crear otro dentro de su constructor (un servicio crea la
-    conexión a la base de datos y esta a su vez lee la configuración).
-    """
-
     _instancias: dict[type, object] = {}
     _candado = threading.RLock()
 
+    # Devuelve la instancia existente de la clase o la crea una sola vez.
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instancias:
+            # Doble verificación con candado reentrante: cada sesión de Streamlit corre en su propio hilo.
             with cls._candado:
                 if cls not in cls._instancias:
                     cls._instancias[cls] = super().__call__(*args, **kwargs)

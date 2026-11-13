@@ -1,5 +1,3 @@
-"""Estado compartido entre páginas: escenario activo, avisos diferidos y cookies."""
-
 import json
 
 import streamlit as st
@@ -9,10 +7,12 @@ from backend.services.scenario_service import DatosEscenario, ResumenEscenario, 
 from backend.utils.exceptions import ErrorEcoResiduos
 
 
+# Escenarios disponibles.
 def escenarios() -> list[ResumenEscenario]:
     return ServicioEscenarios().listar()
 
 
+# Escenario activo de la sesión, o el primero si el guardado ya no existe.
 def id_escenario_activo() -> int | None:
     ids = [e.id for e in escenarios()]
     if st.session_state.get("escenario_activo") not in ids:
@@ -20,6 +20,7 @@ def id_escenario_activo() -> int | None:
     return st.session_state.escenario_activo
 
 
+# Datos del escenario activo.
 def cargar_escenario() -> DatosEscenario:
     escenario_id = id_escenario_activo()
     if escenario_id is None:
@@ -32,30 +33,28 @@ def cargar_escenario() -> DatosEscenario:
         st.stop()
 
 
+# Programa un aviso que sobrevive a st.rerun y se muestra en la siguiente ejecución.
 def avisar(mensaje: str, icono: str = ":material/check_circle:") -> None:
-    """Muestra un aviso en la siguiente ejecución (sobrevive a st.rerun)."""
     st.session_state.setdefault("_avisos", []).append((mensaje, icono))
 
 
+# Muestra los avisos pendientes.
 def mostrar_avisos() -> None:
     for mensaje, icono in st.session_state.pop("_avisos", []):
         st.toast(mensaje, icon=icono)
 
 
+# Valor de una cookie de la petición.
 def leer_cookie(nombre: str) -> str | None:
     return st.context.cookies.get(nombre)
 
 
+# Deja una cookie pendiente; segundos_vida = 0 la elimina.
 def programar_cookie(nombre: str, valor: str, segundos_vida: int) -> None:
-    """Deja una cookie pendiente; se escribe en el navegador en la siguiente ejecución.
-
-    Streamlit no permite fijar cookies desde el servidor, así que se escriben con
-    un componente HTML que comparte origen con la aplicación. Con segundos_vida = 0
-    la cookie se elimina.
-    """
     st.session_state.setdefault("_cookies", {})[nombre] = (valor, segundos_vida)
 
 
+# Escribe las cookies pendientes con un componente HTML, porque Streamlit no las fija desde el servidor.
 def escribir_cookies() -> None:
     pendientes = st.session_state.pop("_cookies", None)
     if not pendientes:

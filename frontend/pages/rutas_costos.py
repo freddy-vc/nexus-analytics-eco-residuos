@@ -12,6 +12,7 @@ m, n = len(escenario.empresas), len(escenario.plantas)
 costos = escenario.costos_unitarios
 
 
+# Guarda las distancias editadas y recalcula los costos unitarios.
 def recalcular():
     distancias = {
         int(ruta_id): float(st.session_state.get(f"num_d_{ruta_id}", escenario.distancias[i, j]))

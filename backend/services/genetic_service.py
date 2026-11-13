@@ -30,7 +30,6 @@ class CorridaAG:
 
 @dataclass
 class LoteAG:
-    """Corridas del AG lanzadas juntas sobre un escenario (comparten la hora de inicio)."""
     escenario_id: int
     ejecutado_en: datetime
     parametros: ParametrosAG
@@ -39,17 +38,18 @@ class LoteAG:
     historial_mejor: list[Generacion]
     flujos_mejor: np.ndarray | None
 
+    # Mejor corrida del lote.
     @property
     def mejor(self) -> CorridaAG:
         return self.corridas[self.estadisticas.indice_mejor]
 
 
 class ServicioGenetico(metaclass=MetaSingleton):
-    """Ejecuta el algoritmo genético, guarda cada corrida y recupera el último lote."""
-
+    # Obtiene la instancia única de la base de datos.
     def __init__(self):
         self._bd = BaseDatos()
 
+    # Ejecuta N corridas del AG, guarda cada una con su historial y devuelve el lote.
     def resolver(self, escenario: DatosEscenario, parametros: ParametrosAG, corridas: int,
                  al_avanzar: Callable[[int, int, int, int], None] | None = None) -> LoteAG:
         errores = parametros.validar()
@@ -96,6 +96,7 @@ class ServicioGenetico(metaclass=MetaSingleton):
                     for ruta_id, t in zip(escenario.ids_rutas[mascara], r.flujos[mascara])])
         return self.ultimo_lote(escenario)
 
+    # Último lote de corridas del AG del escenario.
     def ultimo_lote(self, escenario: DatosEscenario) -> LoteAG | None:
         with self._bd.sesion() as sesion:
             inicio = sesion.scalar(
@@ -141,8 +142,8 @@ class ServicioGenetico(metaclass=MetaSingleton):
                     flujos[posicion[resultado.ruta_id]] = float(resultado.toneladas)
             return LoteAG(escenario.id, inicio, parametros, corridas, estad, historial, flujos)
 
+    # Parámetros de la última corrida para precargar el formulario.
     def parametros_recientes(self) -> ParametrosAG | None:
-        """Parámetros de la última corrida en cualquier escenario, para precargar el formulario."""
         with self._bd.sesion() as sesion:
             fila = sesion.execute(
                 select(ParametrosAGBD, MetodoSeleccion.nombre, TipoCruce.nombre)
@@ -155,6 +156,7 @@ class ServicioGenetico(metaclass=MetaSingleton):
                                 float(bd.tasa_mutacion), seleccion, bd.tamano_torneo or 3, cruce, bd.elitismo,
                                 float(bd.factor_penalizacion), bd.semilla)
 
+    # Identificador de un valor de catálogo por su nombre.
     @staticmethod
     def _id(sesion, modelo, nombre: str) -> int:
         identificador = sesion.scalar(select(modelo.id).where(modelo.nombre == nombre))

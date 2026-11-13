@@ -1,8 +1,9 @@
 from datetime import datetime
 
 
+# Errores de dominio con mensajes aptos para mostrar al usuario.
 class ErrorEcoResiduos(Exception):
-    """Error de dominio con un mensaje apto para mostrar al usuario."""
+    pass
 
 
 class ErrorValidacion(ErrorEcoResiduos):
@@ -14,6 +15,7 @@ class ErrorNoEncontrado(ErrorEcoResiduos):
 
 
 class ErrorAutenticacion(ErrorEcoResiduos):
+    # Guarda los intentos restantes y la fecha de fin del bloqueo, si aplica.
     def __init__(self, mensaje: str, intentos_restantes: int | None = None,
                  bloqueado_hasta: datetime | None = None):
         super().__init__(mensaje)

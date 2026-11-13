@@ -289,7 +289,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 [class*="st-key-pestanas_"] [role="radiogroup"] > label > div:first-child { display: none; }
 [class*="st-key-pestanas_"] [role="radiogroup"] > label p { font-size: 14px; font-weight: 600; color: inherit !important; }
 [class*="st-key-pestanas_"] [role="radiogroup"] > label:has(input:checked) {
-  background: var(--sf); color: var(--tx); box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  background: var(--sf); color: var(--tx); box-shadow: 0 1px 3px color-mix(in srgb, var(--tx) 10%, transparent);
 }
 
 /* Diálogos y avisos */
@@ -445,8 +445,8 @@ div[role="dialog"] h2, div[role="dialog"] h2 span { color: var(--tx); font-size:
 [data-testid="stElementContainer"]:has(> [data-testid="stHtml"] > .enlace-bloqueado) { flex: 0 0 auto !important; width: auto !important; }
 
 /* Componente invisible que escribe las cookies de sesión y tema */
-.st-key-cookies { position: absolute !important; width: 0 !important; height: 0 !important; overflow: hidden; }
-[data-testid="stLayoutWrapper"]:has(> .st-key-cookies) { position: absolute; width: 0; height: 0; overflow: hidden; }
+[class*="st-key-cookies"] { position: absolute !important; width: 0 !important; height: 0 !important; overflow: hidden; }
+[data-testid="stLayoutWrapper"]:has(> [class*="st-key-cookies"]) { position: absolute; width: 0; height: 0; overflow: hidden; }
 
 /* Verificaciones, utilización y composición */
 .verificacion { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
@@ -499,7 +499,7 @@ div[role="dialog"] h2, div[role="dialog"] h2 span { color: var(--tx); font-size:
 [class*="st-key-pestanas_"] [data-testid="stRadioOption"] > div > div:first-child:not([data-testid]) { display: none; }
 [class*="st-key-pestanas_"] [data-testid="stRadioOption"] p { font-size: 14px; font-weight: 600; color: inherit !important; margin: 0; }
 [class*="st-key-pestanas_"] [data-testid="stRadioOption"][data-selected="true"] {
-  background: var(--sf); color: var(--tx); box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  background: var(--sf); color: var(--tx); box-shadow: 0 1px 3px color-mix(in srgb, var(--tx) 10%, transparent);
 }
 .st-key-tarjeta_grafo iframe { height: 696px !important; }
 

@@ -1,9 +1,42 @@
-[theme]
-base = "light"
-primaryColor = "#6CC51D"
-backgroundColor = "#F5F7FA"
-secondaryBackgroundColor = "#FFFFFF"
-textColor = "#1F2A30"
+# Colores de la interfaz. [theme.light] es el tema claro y [theme.dark] el oscuro.
+# Toda la aplicación (estilos, gráficas, grafo de la red, componentes de Streamlit y
+# reporte PDF, que usa el tema claro) toma los colores de aquí: al cambiar un valor y
+# reiniciar Streamlit se actualiza toda la interfaz.
+# El texto sobre el color de acento y las sombras se calculan a partir de estos colores.
+
+[theme.light]
+primaryColor = "#6CC51D"                    # Acento: botones principales, enlaces activos, flujos óptimos
+backgroundColor = "#F5F7FA"                 # Fondo de la página
+secondaryBackgroundColor = "#FFFFFF"        # Tarjetas, barra lateral, campos y menús
+dataframeHeaderBackgroundColor = "#F0F3F6"  # Superficie secundaria: encabezados de tabla, pestañas, grafo
+textColor = "#1F2A30"                       # Texto principal
+grayTextColor = "#5B6770"                   # Texto secundario (etiquetas, notas, unidades)
+borderColor = "#E3E7EC"                     # Bordes y líneas divisorias
+greenTextColor = "#3B820E"                  # Texto en verde: estado correcto, cifras destacadas
+greenBackgroundColor = "#EEF8E4"            # Fondo de insignias y avisos correctos
+blueTextColor = "#1D4ED8"                   # Texto en azul: algoritmo genético, información
+blueBackgroundColor = "#E6EEFD"             # Fondo de insignias del algoritmo genético
+orangeTextColor = "#92400E"                 # Texto de advertencias (desbalance, cambia el plan)
+orangeBackgroundColor = "#FEF3C7"           # Fondo de advertencias
+redTextColor = "#B42318"                    # Texto de errores
+redBackgroundColor = "#FDECEA"              # Fondo de errores
+
+[theme.dark]
+primaryColor = "#C8F135"
+backgroundColor = "#141517"
+secondaryBackgroundColor = "#1E1F22"
+dataframeHeaderBackgroundColor = "#121315"
+textColor = "#F2F3F5"
+grayTextColor = "#8F949A"
+borderColor = "#2C2E33"
+greenTextColor = "#C8F135"
+greenBackgroundColor = "#2A3312"
+blueTextColor = "#7AA7FF"
+blueBackgroundColor = "#1A2438"
+orangeTextColor = "#FBBF24"
+orangeBackgroundColor = "#33270F"
+redTextColor = "#F87171"
+redBackgroundColor = "#3A1717"
 
 [client]
 toolbarMode = "minimal"

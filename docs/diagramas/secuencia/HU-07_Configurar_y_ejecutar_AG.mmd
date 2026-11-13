@@ -1,0 +1,89 @@
+%%{init: {"theme": "base", "fontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "themeVariables": {"actorBkg": "#FFFFFF", "actorBorder": "#3F3F46", "actorTextColor": "#27272A", "actorLineColor": "#3F3F46", "signalColor": "#27272A", "signalTextColor": "#27272A", "labelBoxBkgColor": "#FFFFFF", "labelBoxBorderColor": "#3F3F46", "labelTextColor": "#27272A", "loopTextColor": "#3F3F46", "noteBkgColor": "#FFFBEB", "noteBorderColor": "#E5C07B", "noteTextColor": "#3F3F46", "activationBkgColor": "#F4F4F5", "activationBorderColor": "#A1A1AA"}, "sequence": {"messageFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "actorFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "noteFontFamily": "Segoe UI, Helvetica, Arial, sans-serif", "messageFontSize": 14, "actorFontSize": 14, "noteFontSize": 13, "mirrorActors": true, "actorMargin": 60, "messageMargin": 32, "boxMargin": 8, "noteMargin": 10, "width": 170, "height": 56, "useMaxWidth": false}, "themeCSS": ".actor-line{stroke:#3F3F46 !important;stroke-width:1.3px !important}.actor-man line,.actor-man circle{stroke:#D946EF !important;stroke-width:2px !important}.actor-man circle{fill:#FFFFFF !important}text.actor-man,text.actor tspan{fill:#27272A !important}.messageLine0,.messageLine1{stroke:#27272A !important;stroke-width:1.4px !important}.loopLine{stroke:#3F3F46 !important;stroke-dasharray:2 3 !important;stroke-width:1.2px !important}.labelBox{fill:#FFFFFF !important;stroke:#3F3F46 !important}.loopText,.loopText tspan{fill:#3F3F46 !important}rect.actor{rx:8px;ry:8px;stroke-width:1.6px !important;filter:drop-shadow(0 2px 3px rgba(0,0,0,.12))}rect.actor[name=ESC]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=GEN]{fill:#FFF4E8 !important;stroke:#F5A04A !important}rect.actor[name=PAG]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=DE]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=AGA]{fill:#EAFAF0 !important;stroke:#4CCF7A !important}rect.actor[name=PT]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=CR]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=RAG]{fill:#F3EFFF !important;stroke:#A285F0 !important}rect.actor[name=BD]{fill:#E8FBFF !important;stroke:#22CCEE !important}rect.actor[name=SES]{fill:#FFF1F1 !important;stroke:#F07070 !important}rect.actor[name=LT]{fill:#F3EFFF !important;stroke:#A285F0 !important}"}}%%
+%% HU-07 · Configuración y ejecución del algoritmo genético
+sequenceDiagram
+    actor A as Analista
+    participant ESC as ServicioEscenarios
+    participant GEN as ServicioGenetico
+    participant PAG as parametros: ParametrosAG
+    participant DE as escenario: DatosEscenario
+    participant AGA as AlgoritmoGenetico
+    participant PT as problema: ProblemaTransporte
+    participant CR as Cronometro
+    participant RAG as resultado: ResultadoAG
+    participant BD as BaseDatos
+    participant SES as Session (SQLAlchemy)
+    participant LT as lote: LoteAG
+    A->>+ESC: cargar(escenario_id: int): DatosEscenario
+    ESC-->>-A: DatosEscenario
+
+    A->>+GEN: parametros_recientes(): ParametrosAG | None
+    GEN->>+BD: sesion(): Iterator[Session]
+    BD-->>-GEN: Session
+    GEN->>+SES: execute(statement: Select[tuple[ParametrosAG, str, str]]): Result
+    SES-->>-GEN: Result
+    GEN-->>-A: ParametrosAG | None
+    A->>+PAG: ParametrosAG(tamano_poblacion: int, num_generaciones: int, tasa_cruce: float,<br/>tasa_mutacion: float, seleccion: str, tamano_torneo: int, cruce: str,<br/>elitismo: int, penalizacion: float, semilla: int | None)
+    PAG-->>-A: ParametrosAG
+    A->>+GEN: resolver(escenario: DatosEscenario, parametros: ParametrosAG, corridas: int,<br/>al_avanzar: Callable[[int, int, int, int], None] | None): LoteAG
+    GEN->>+PAG: validar(): list[str]
+    PAG-->>-GEN: list[str]
+    alt parámetros inválidos, corridas fuera de 1 a 50 o sin rutas habilitadas
+        GEN-->>A: ErrorValidacion
+    else válido
+        GEN->>+DE: problema(): ProblemaTransporte
+        DE-->>-GEN: ProblemaTransporte
+        Note over GEN,AGA: multi_run.ejecutar_corridas(...) repite el AG con semillas consecutivas
+        loop k = 1 … corridas
+            GEN->>+AGA: AlgoritmoGenetico(problema: ProblemaTransporte, parametros: ParametrosAG)
+            AGA-->>-GEN: AlgoritmoGenetico
+            GEN->>+AGA: ejecutar(al_avanzar: Callable[[int, int], None] | None): ResultadoAG
+            AGA->>+PT: «property» dimension(): tuple[int, int]
+            PT-->>-AGA: tuple[int, int]
+            AGA->>+CR: Cronometro()
+            CR-->>-AGA: Cronometro
+            AGA->>+CR: __enter__(): Cronometro
+            CR-->>-AGA: Cronometro
+            AGA->>AGA: _celdas_ficticias(bal: ProblemaBalanceado, m: int, n: int): np.ndarray
+            loop generación = 1 … num_generaciones
+                Note over AGA: Elitismo, seleccionar(), cruzar(), mutar(), reparar_oferta() y evaluar() (funciones de selection, crossover, mutation, chromosome y fitness)
+            end
+            AGA->>+CR: __exit__(*excepcion: Any): bool
+            CR-->>-AGA: bool
+            Note over AGA: reparar_capacidad(...) corrige el exceso de capacidad del mejor individuo
+            AGA->>+RAG: ResultadoAG(flujos: np.ndarray, costo: float, exceso: float,<br/>plantas_excedidas: int, milisegundos: float, semilla: int | None,<br/>historial: list[Generacion], sin_enviar: np.ndarray | None,<br/>capacidad_ociosa: np.ndarray | None)
+            RAG-->>-AGA: ResultadoAG
+            AGA-->>-GEN: ResultadoAG
+        end
+        GEN->>+BD: sesion(): Iterator[Session]
+        BD-->>-GEN: Session
+        GEN->>GEN: _id(sesion: Session, modelo: type[ModeloBase], nombre: str): int
+        loop por cada ResultadoAG
+            GEN->>+RAG: «property» es_factible(): bool
+            RAG-->>-GEN: bool
+            GEN->>+SES: add(instance: Ejecucion): None
+            SES-->>-GEN: None
+            GEN->>+SES: flush(): None
+            SES-->>-GEN: None
+            GEN->>+SES: add(instance: ParametrosAG): None
+            SES-->>-GEN: None
+            GEN->>+SES: execute(statement: Insert[HistorialGeneracion], params: list[dict]): Result
+            SES-->>-GEN: Result
+            GEN->>+SES: execute(statement: Insert[ResultadoRuta], params: list[dict]): Result
+            SES-->>-GEN: Result
+        end
+        BD->>+SES: commit(): None
+        SES-->>-BD: None
+        GEN->>GEN: ultimo_lote(escenario: DatosEscenario): LoteAG | None
+        GEN->>+SES: scalar(statement: Select[tuple[datetime]]): datetime | None
+        SES-->>-GEN: datetime | None
+        GEN->>+SES: scalars(statement: Select[tuple[Ejecucion]]): ScalarResult[Ejecucion]
+        SES-->>-GEN: ScalarResult[Ejecucion]
+        GEN->>+SES: scalars(statement: Select[tuple[HistorialGeneracion]]): ScalarResult[HistorialGeneracion]
+        SES-->>-GEN: ScalarResult[HistorialGeneracion]
+        GEN->>+LT: LoteAG(escenario_id: int, ejecutado_en: datetime, parametros: ParametrosAG,<br/>corridas: list[CorridaAG], estadisticas: Estadisticas,<br/>historial_mejor: list[Generacion], flujos_mejor: np.ndarray | None)
+        LT-->>-GEN: LoteAG
+        GEN-->>A: LoteAG
+    end
+    deactivate GEN
+    A->>+LT: «property» mejor(): CorridaAG
+    LT-->>-A: CorridaAG
